@@ -23,27 +23,13 @@ const MIME = {
   '.ico':  'image/x-icon',
 };
 
-http.createServer((req, res) => {
+// ── Helper: sleep ──────────────────────────────────────────────────────────
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
-
-  if (req.method === 'POST' && req.url === '/api/chat') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', () => {
-      let parsed;
-      try { parsed = JSON.parse(body); }
-      catch (e) { res.writeHead(400); res.end(JSON.stringify({ error: 'Invalid JSON' })); return; }
-
-      parsed.model      = MODEL;
-      parsed.max_tokens = parsed.max_tokens || 8000;
-      delete parsed.stream;
-
-      const payload = JSON.stringify(parsed);
-
+// ── Helper: call Anthropic with automatic retry on 429 ─────────────────────
+async function callAnthropic(payload, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const result = await new Promise((resolve, reject) => {
       const options = {
         hostname: ANTHROPIC,
         path:     '/v1/messages',
@@ -60,23 +46,77 @@ http.createServer((req, res) => {
       const apiReq = https.request(options, apiRes => {
         let data = '';
         apiRes.on('data', c => data += c);
-        apiRes.on('end', () => {
-          res.writeHead(apiRes.statusCode, { 'Content-Type': 'application/json' });
-          res.end(data);
-        });
+        apiRes.on('end', () => resolve({ status: apiRes.statusCode, body: data }));
       });
 
-      apiReq.on('error', err => {
-        res.writeHead(502);
-        res.end(JSON.stringify({ error: err.message }));
-      });
-
+      apiReq.on('error', err => reject(err));
       apiReq.write(payload);
       apiReq.end();
+    });
+
+    // Success or non-retryable error — return immediately
+    if (result.status !== 429 && result.status !== 529) {
+      return result;
+    }
+
+    // Rate limited — parse retry-after header or use exponential backoff
+    let waitMs = Math.pow(2, attempt) * 2000; // 4s, 8s, 16s
+    try {
+      const parsed = JSON.parse(result.body);
+      // Anthropic sometimes includes retry_after in the error
+      if (parsed.error && parsed.error.retry_after) {
+        waitMs = parsed.error.retry_after * 1000;
+      }
+    } catch (_) {}
+
+    console.log(`Rate limited (429). Attempt ${attempt}/${retries}. Waiting ${waitMs/1000}s...`);
+
+    if (attempt < retries) {
+      await sleep(waitMs);
+    } else {
+      // Exhausted retries — return the 429 so the client knows
+      return result;
+    }
+  }
+}
+
+// ── HTTP Server ────────────────────────────────────────────────────────────
+http.createServer((req, res) => {
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+  // ── API proxy with retry ──
+  if (req.method === 'POST' && req.url === '/api/chat') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      let parsed;
+      try { parsed = JSON.parse(body); }
+      catch (e) { res.writeHead(400); res.end(JSON.stringify({ error: 'Invalid JSON' })); return; }
+
+      parsed.model      = MODEL;
+      parsed.max_tokens = parsed.max_tokens || 8000;
+      delete parsed.stream;
+
+      const payload = JSON.stringify(parsed);
+
+      try {
+        const result = await callAnthropic(payload);
+        res.writeHead(result.status, { 'Content-Type': 'application/json' });
+        res.end(result.body);
+      } catch (err) {
+        console.error('API error:', err.message);
+        res.writeHead(502);
+        res.end(JSON.stringify({ error: err.message }));
+      }
     });
     return;
   }
 
+  // ── Serve static files ──
   let filePath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
   filePath = path.join(__dirname, filePath);
   if (!filePath.startsWith(__dirname)) { res.writeHead(403); res.end('Forbidden'); return; }
