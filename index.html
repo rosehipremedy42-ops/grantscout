@@ -346,29 +346,36 @@ function applyFilters(){
   renderGrants(shown);
   $('statShown').textContent=shown.length;
 }
+// Store a flat lookup so clicks always work regardless of what id the AI returned
+let grantIndex = {};
+
 function renderGrants(grants){
   const c=$('grantsContainer');
   if(!grants.length){
     c.innerHTML=`<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No matches</div><div class="empty-sub">Adjust your filters</div></div>`;
     return;
   }
+  // Re-index every time we render so clicking always resolves correctly
+  grantIndex = {};
+  grants.forEach((g, i) => { grantIndex[i] = g; });
+
   c.innerHTML='<div class="grants-list">'+grants.map((g,i)=>`
-    <div class="grant-card" style="animation-delay:${Math.min(i*.05,.6)}s" onclick="openModal(${g.id})">
+    <div class="grant-card" style="animation-delay:${Math.min(i*.05,.6)}s" onclick="openModal(${i})">
       <div class="grant-header">
-        <div class="grant-title">${esc(g.title)}</div>
-        <div class="grant-amount">${esc(g.amount)}</div>
+        <div class="grant-title">${esc(g.title||'Untitled Grant')}</div>
+        <div class="grant-amount">${esc(g.amount||'See details')}</div>
       </div>
-      <div class="grant-desc">${esc(g.summary)}</div>
+      <div class="grant-desc">${esc(g.summary||g.description||'')}</div>
       <div class="grant-footer">
-        <span class="grant-tag ${esc(g.status)}">${g.status==='open'?'Open':'Upcoming'}</span>
+        <span class="grant-tag ${esc(g.status||'open')}">${(g.status||'open')==='open'?'Open':'Upcoming'}</span>
         ${(g.bizTypes||[]).slice(0,2).map(b=>`<span class="grant-tag">${esc(b)}</span>`).join('')}
-        <span class="grant-dept">${esc(g.dept)}</span>
+        <span class="grant-dept">${esc(g.dept||'GOV.UK')}</span>
         ${g.deadline?`<span class="grant-date">${esc(g.deadline)}</span>`:''}
       </div>
     </div>`).join('')+'</div>';
 }
-function openModal(id){
-  const g=allGrants.find(x=>x.id===id);if(!g)return;
+function openModal(idx){
+  const g=grantIndex[idx];if(!g)return;
   $('mTitle').textContent=g.title; $('mDept').textContent=g.dept;
   $('mAmount').textContent=g.amount; $('mDesc').textContent=g.description;
   $('mElig').textContent=g.eligibility; $('mHow').textContent=g.howToApply;
