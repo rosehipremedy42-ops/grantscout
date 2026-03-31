@@ -444,7 +444,7 @@ status ("open"|"upcoming"), deadline (string|null), url (string).`;
     let finalText='';
     let searches=0;
 
-    for(let loop=0;loop<8;loop++){
+    for(let loop=0;loop<4;loop++){
       const data=await callAPI({
         system:SYSTEM,
         tools:[{type:'web_search_20250305',name:'web_search'}],
@@ -498,9 +498,14 @@ status ("open"|"upcoming"), deadline (string|null), url (string).`;
     }
   }catch(err){
     console.error('Search error:',err);
-    setProgress(100,'Loaded cached dataset');
+    const is429=err.message.includes('429');
+    setProgress(100, is429 ? 'Rate limit — try again shortly' : 'Loaded cached dataset');
     allGrants=getFallback(); updateStats();
-    setAI('active',`⚠️ Live search issue: ${err.message.slice(0,80)}. Showing cached grants.`);
+    if(is429){
+      setAI('thinking',`⏳ <strong>Rate limit reached</strong> — the AI is busy. Please wait 30 seconds then click Refresh.`);
+    } else {
+      setAI('active',`⚠️ Live search issue: ${err.message.slice(0,80)}. Showing cached grants.`);
+    }
     setTimeout(()=>$('progressWrap').classList.remove('show'),5000);
   }
 
