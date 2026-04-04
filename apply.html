@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apply for a Grant — GrantScout UK</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+:root{--navy:#0a0e1a;--ink:#141927;--panel:#1a2035;--border:#252d45;--accent:#00e5a0;--accent2:#4f6dff;--warn:#ffb830;--text:#e2e8f8;--muted:#6b7a9e;--white:#ffffff;--danger:#ff6b6b;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--navy);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(79,109,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(79,109,255,.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+.wrap{position:relative;z-index:1;max-width:1300px;margin:0 auto;padding:0 24px;}
+
+/* Header */
+header{border-bottom:1px solid var(--border);padding:18px 0;background:rgba(10,14,26,.97);backdrop-filter:blur(14px);position:sticky;top:0;z-index:100;}
+.header-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;}
+.logo{display:flex;align-items:center;gap:12px;text-decoration:none;}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.logo-text{font-family:'DM Serif Display',serif;font-size:20px;color:var(--white);}
+.logo-text span{color:var(--accent);}
+.nav{display:flex;align-items:center;gap:8px;}
+.nav-link{font-size:13px;color:var(--muted);text-decoration:none;padding:7px 14px;border-radius:8px;border:1px solid transparent;transition:all .2s;}
+.nav-link:hover{color:var(--text);border-color:var(--border);}
+.nav-link.active{color:var(--accent);border-color:rgba(0,229,160,.3);background:rgba(0,229,160,.06);}
+.badges{display:flex;gap:8px;}
+.badge{font-family:'DM Mono',monospace;font-size:10px;padding:3px 8px;border-radius:4px;letter-spacing:1px;}
+.badge.sec{background:rgba(0,229,160,.1);color:var(--accent);border:1px solid rgba(0,229,160,.3);}
+
+/* Page layout */
+.page{display:flex;gap:0;min-height:calc(100vh - 77px);}
+
+/* Left sidebar — grant info + steps */
+.left-panel{width:260px;flex-shrink:0;border-right:1px solid var(--border);padding:24px 20px;display:flex;flex-direction:column;gap:16px;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;}
+.panel-title{font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;}
+
+/* Grant selector */
+.grant-select-wrap select{width:100%;background:var(--ink);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;padding:10px 12px;appearance:none;cursor:pointer;}
+.grant-select-wrap select:focus{outline:none;border-color:var(--accent2);}
+.selected-grant{margin-top:12px;padding:12px;background:var(--ink);border:1px solid var(--border);border-radius:8px;display:none;}
+.selected-grant.show{display:block;}
+.sg-name{font-size:13px;font-weight:600;color:var(--white);margin-bottom:4px;}
+.sg-dept{font-size:11px;color:var(--muted);margin-bottom:8px;}
+.sg-amount{font-family:'DM Mono',monospace;font-size:15px;color:var(--accent);}
+
+/* Progress steps */
+.steps{display:flex;flex-direction:column;gap:8px;}
+.step-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:all .15s;}
+.step-item:hover{background:rgba(255,255,255,.03);}
+.step-item.active{background:rgba(79,109,255,.1);border-color:rgba(79,109,255,.3);}
+.step-item.done{opacity:.7;}
+.step-num{width:24px;height:24px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--muted);flex-shrink:0;font-family:'DM Mono',monospace;}
+.step-item.active .step-num{background:var(--accent2);color:#fff;}
+.step-item.done .step-num{background:var(--accent);color:var(--navy);}
+.step-item.done .step-num::after{content:'✓';}
+.step-item.done .step-num{font-size:0;}
+.step-item.done .step-num::after{font-size:12px;}
+.step-label{font-size:13px;color:var(--muted);}
+.step-item.active .step-label{color:var(--text);font-weight:500;}
+
+/* Score card */
+.score-card{text-align:center;}
+.score-ring{width:80px;height:80px;margin:0 auto 12px;position:relative;}
+.score-ring svg{width:80px;height:80px;transform:rotate(-90deg);}
+.score-ring circle{fill:none;stroke-width:6;}
+.score-bg{stroke:var(--border);}
+.score-fill{stroke:var(--accent);stroke-linecap:round;stroke-dasharray:220;stroke-dashoffset:220;transition:stroke-dashoffset .6s ease;}
+.score-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:20px;font-weight:500;color:var(--white);}
+.score-label{font-size:12px;color:var(--muted);}
+.score-breakdown{margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+.score-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;}
+.score-row span:first-child{color:var(--muted);}
+.score-bar-wrap{flex:1;margin:0 8px;height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+.score-bar{height:100%;border-radius:2px;background:var(--accent2);transition:width .4s;}
+.score-val{font-family:'DM Mono',monospace;color:var(--text);min-width:28px;text-align:right;}
+
+/* Centre — form */
+.centre-panel{flex:1;padding:28px 32px;min-width:0;overflow-y:auto;}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.section-title{font-family:'DM Serif Display',serif;font-size:22px;color:var(--white);}
+.section-sub{font-size:13px;color:var(--muted);margin-top:4px;}
+
+/* Form fields */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.form-grid.full{grid-template-columns:1fr;}
+.field{display:flex;flex-direction:column;gap:6px;}
+.field label{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;display:flex;align-items:center;gap:6px;}
+.field-hint{font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;}
+.field input,.field select,.field textarea{background:var(--ink);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;padding:11px 14px;transition:border-color .2s,box-shadow .2s;width:100%;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent2);box-shadow:0 0 0 3px rgba(79,109,255,.1);}
+.field textarea{resize:vertical;min-height:120px;line-height:1.6;}
+.field textarea.tall{min-height:180px;}
+.field select{appearance:none;cursor:pointer;}
+.char-count{font-size:11px;font-family:'DM Mono',monospace;text-align:right;margin-top:4px;}
+.char-count.warn{color:var(--warn);}
+.char-count.good{color:var(--accent);}
+
+/* AI suggestion inline */
+.field-wrap{position:relative;}
+.ai-suggest-btn{position:absolute;bottom:10px;right:10px;background:rgba(79,109,255,.15);border:1px solid rgba(79,109,255,.3);color:var(--accent2);border-radius:6px;padding:4px 10px;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .2s;}
+.ai-suggest-btn:hover{background:rgba(79,109,255,.25);}
+.ai-suggest-btn.loading{opacity:.6;cursor:not-allowed;}
+.suggestion-box{margin-top:8px;background:rgba(79,109,255,.06);border:1px solid rgba(79,109,255,.2);border-radius:8px;padding:14px;display:none;animation:fadeIn .2s ease;}
+.suggestion-box.show{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.suggestion-text{font-size:13px;color:var(--text);line-height:1.6;margin-bottom:10px;}
+.suggestion-actions{display:flex;gap:8px;}
+.sug-btn{padding:5px 12px;border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;border:1px solid;transition:all .15s;font-weight:500;}
+.sug-btn.accept{background:var(--accent);color:var(--navy);border-color:var(--accent);}
+.sug-btn.accept:hover{box-shadow:0 4px 12px rgba(0,229,160,.3);}
+.sug-btn.discard{background:transparent;color:var(--muted);border-color:var(--border);}
+.sug-btn.discard:hover{color:var(--text);border-color:var(--muted);}
+
+/* Inline highlights (Grammarly style) */
+.highlight-wrap{position:relative;}
+mark.ai-highlight{background:rgba(79,109,255,.15);border-bottom:2px solid var(--accent2);cursor:pointer;border-radius:2px;}
+mark.ai-highlight.warn{background:rgba(255,184,48,.1);border-bottom-color:var(--warn);}
+mark.ai-highlight.good{background:rgba(0,229,160,.08);border-bottom-color:var(--accent);}
+
+/* Step navigation */
+.step-nav{display:flex;justify-content:space-between;align-items:center;margin-top:28px;padding-top:20px;border-top:1px solid var(--border);}
+.nav-btn{padding:11px 24px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .2s;}
+.nav-btn.prev{background:transparent;color:var(--muted);border:1px solid var(--border);}
+.nav-btn.prev:hover{color:var(--text);border-color:var(--muted);}
+.nav-btn.next{background:var(--accent);color:var(--navy);}
+.nav-btn.next:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,229,160,.3);}
+.nav-btn:disabled{opacity:.4;cursor:not-allowed;transform:none !important;box-shadow:none !important;}
+.step-indicator{font-size:13px;color:var(--muted);font-family:'DM Mono',monospace;}
+
+/* Section divider */
+.section-divider{border:none;border-top:1px solid var(--border);margin:24px 0;}
+
+/* Tips box */
+.tip-box{background:rgba(0,229,160,.05);border:1px solid rgba(0,229,160,.15);border-radius:10px;padding:14px 16px;margin-bottom:20px;display:flex;gap:10px;align-items:flex-start;}
+.tip-icon{font-size:16px;flex-shrink:0;margin-top:1px;}
+.tip-text{font-size:13px;color:var(--text);line-height:1.6;}
+.tip-text strong{color:var(--accent);}
+
+/* Right panel — AI assistant */
+.right-panel{width:320px;flex-shrink:0;border-left:1px solid var(--border);display:flex;flex-direction:column;height:calc(100vh - 77px);position:sticky;top:77px;}
+.assistant-header{padding:18px 20px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,rgba(79,109,255,.12),rgba(0,229,160,.06));}
+.assistant-title{font-weight:600;font-size:15px;color:var(--white);display:flex;align-items:center;gap:8px;margin-bottom:2px;}
+.assistant-sub{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;}
+.assistant-sub::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 4px var(--accent);}
+.sec-bar{font-size:10px;padding:5px 14px;background:rgba(0,229,160,.05);border-bottom:1px solid rgba(0,229,160,.1);color:rgba(0,229,160,.7);display:flex;align-items:center;gap:5px;font-family:'DM Mono',monospace;flex-shrink:0;}
+.chat-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth;}
+.chat-msgs::-webkit-scrollbar{width:3px;}
+.chat-msgs::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.msg{max-width:90%;display:flex;flex-direction:column;gap:3px;animation:msgIn .2s ease both;}
+@keyframes msgIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{align-self:flex-end;}
+.msg.bot{align-self:flex-start;}
+.bubble{padding:10px 13px;border-radius:14px;font-size:13px;line-height:1.6;}
+.msg.user .bubble{background:var(--accent2);color:#fff;border-bottom-right-radius:4px;}
+.msg.bot .bubble{background:var(--ink);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px;}
+.msg-time{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;padding:0 3px;}
+.msg.user .msg-time{text-align:right;}
+.typing-ind{display:flex;align-items:center;gap:4px;padding:11px 13px;background:var(--ink);border:1px solid var(--border);border-radius:14px;border-bottom-left-radius:4px;width:fit-content;}
+.tdot{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:td 1.2s infinite;}
+.tdot:nth-child(2){animation-delay:.2s;}.tdot:nth-child(3){animation-delay:.4s;}
+@keyframes td{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+.chat-input-row{padding:12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end;flex-shrink:0;}
+#chatInput{flex:1;background:var(--ink);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 12px;resize:none;max-height:80px;min-height:38px;line-height:1.5;}
+#chatInput:focus{outline:none;border-color:var(--accent2);}
+#chatSend{width:36px;height:36px;border-radius:9px;background:var(--accent2);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;transition:all .2s;}
+#chatSend:hover{background:#6b85ff;}
+#chatSend:disabled{opacity:.4;cursor:not-allowed;}
+.quick-actions{padding:0 12px 10px;display:flex;gap:5px;flex-wrap:wrap;}
+.qa{font-size:11px;padding:4px 9px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.qa:hover{border-color:var(--accent2);color:var(--accent2);}
+
+/* Final review */
+.review-section{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;}
+.review-title{font-family:'DM Serif Display',serif;font-size:16px;color:var(--white);margin-bottom:4px;}
+.review-value{font-size:14px;color:var(--text);line-height:1.7;margin-top:8px;white-space:pre-wrap;}
+.review-empty{font-size:13px;color:var(--muted);font-style:italic;}
+.download-btn{width:100%;padding:14px;background:var(--accent);color:var(--navy);border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;margin-top:8px;}
+.download-btn:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,229,160,.3);}
+.download-btn.sec{background:transparent;color:var(--accent2);border:1px solid rgba(79,109,255,.3);margin-top:10px;}
+.download-btn.sec:hover{background:rgba(79,109,255,.1);}
+
+/* Animations */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="header-inner">
+      <a class="logo" href="index.html">
+        <div class="logo-icon">🏛️</div>
+        <div class="logo-text">Grant<span>Scout</span> UK</div>
+      </a>
+      <nav class="nav">
+        <a class="nav-link" href="index.html">🔍 Find Grants</a>
+        <a class="nav-link active" href="apply.html">✍️ Apply</a>
+      </nav>
+      <div class="badges">
+        <span class="badge sec">🔒 SECURE</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- ── Left: Steps + Score ── -->
+  <aside class="left-panel">
+
+    <div class="panel">
+      <div class="panel-title">Grant</div>
+      <div class="grant-select-wrap">
+        <select id="grantSelect" onchange="onGrantChange()">
+          <option value="">— Select a grant —</option>
+          <option value="innovate">Innovate UK Smart Grants</option>
+          <option value="prosperity">UK Shared Prosperity Fund</option>
+          <option value="farming">Farming Investment Fund</option>
+          <option value="energy">Energy Entrepreneurs Fund</option>
+          <option value="startup">Start Up Loans</option>
+          <option value="smarter">Made Smarter Adoption</option>
+          <option value="community">Community Ownership Fund</option>
+          <option value="other">Other / Custom</option>
+        </select>
+      </div>
+      <div class="selected-grant" id="selectedGrantInfo">
+        <div class="sg-name" id="sgName"></div>
+        <div class="sg-dept" id="sgDept"></div>
+        <div class="sg-amount" id="sgAmount"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Progress</div>
+      <div class="steps" id="stepsList">
+        <div class="step-item active" onclick="goToStep(0)">
+          <div class="step-num">1</div>
+          <div class="step-label">Your Business</div>
+        </div>
+        <div class="step-item" onclick="goToStep(1)">
+          <div class="step-num">2</div>
+          <div class="step-label">The Project</div>
+        </div>
+        <div class="step-item" onclick="goToStep(2)">
+          <div class="step-num">3</div>
+          <div class="step-label">Financials</div>
+        </div>
+        <div class="step-item" onclick="goToStep(3)">
+          <div class="step-num">4</div>
+          <div class="step-label">Impact &amp; Need</div>
+        </div>
+        <div class="step-item" onclick="goToStep(4)">
+          <div class="step-num">5</div>
+          <div class="step-label">Review &amp; Export</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel score-card">
+      <div class="panel-title">Application Score</div>
+      <div class="score-ring">
+        <svg viewBox="0 0 80 80">
+          <circle class="score-bg" cx="40" cy="40" r="35"/>
+          <circle class="score-fill" id="scoreFill" cx="40" cy="40" r="35"/>
+        </svg>
+        <div class="score-num" id="scoreNum">0</div>
+      </div>
+      <div class="score-label">out of 100</div>
+      <div class="score-breakdown">
+        <div class="score-row"><span>Clarity</span><div class="score-bar-wrap"><div class="score-bar" id="barClarity" style="width:0%"></div></div><span class="score-val" id="valClarity">0</span></div>
+        <div class="score-row"><span>Detail</span><div class="score-bar-wrap"><div class="score-bar" id="barDetail" style="width:0%"></div></div><span class="score-val" id="valDetail">0</span></div>
+        <div class="score-row"><span>Impact</span><div class="score-bar-wrap"><div class="score-bar" id="barImpact" style="width:0%"></div></div><span class="score-val" id="valImpact">0</span></div>
+        <div class="score-row"><span>Complete</span><div class="score-bar-wrap"><div class="score-bar" id="barComplete" style="width:0%"></div></div><span class="score-val" id="valComplete">0</span></div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── Centre: Form ── -->
+  <main class="centre-panel" id="centrePanel">
+
+    <!-- STEP 0: Business Info -->
+    <div id="step0">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Your Business</div>
+          <div class="section-sub">Tell us about the organisation applying for this grant</div>
+        </div>
+      </div>
+      <div class="tip-box">
+        <div class="tip-icon">💡</div>
+        <div class="tip-text">Click <strong>✨ Improve</strong> on any text field to get AI suggestions. The assistant on the right can also help you write stronger answers.</div>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Organisation Name</label>
+          <input type="text" id="orgName" placeholder="e.g. Acme Technologies Ltd" oninput="scheduleScore()">
+        </div>
+        <div class="field">
+          <label>Companies House Number <span class="field-hint">(if applicable)</span></label>
+          <input type="text" id="companyNum" placeholder="e.g. 12345678">
+        </div>
+        <div class="field">
+          <label>Organisation Type</label>
+          <select id="orgType" onchange="scheduleScore()">
+            <option value="">Select type…</option>
+            <option>Limited Company</option>
+            <option>Sole Trader</option>
+            <option>Partnership</option>
+            <option>CIC (Community Interest Company)</option>
+            <option>Charity</option>
+            <option>Social Enterprise</option>
+            <option>LLP</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Sector / Industry</label>
+          <input type="text" id="sector" placeholder="e.g. Clean Energy Technology" oninput="scheduleScore()">
+        </div>
+        <div class="field">
+          <label>Number of Employees</label>
+          <select id="employees">
+            <option value="">Select…</option>
+            <option>1–9 (Micro)</option>
+            <option>10–49 (Small)</option>
+            <option>50–249 (Medium)</option>
+            <option>250+ (Large)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Annual Turnover</label>
+          <select id="turnover">
+            <option value="">Select…</option>
+            <option>Under £100,000</option>
+            <option>£100,000–£500,000</option>
+            <option>£500,000–£2,000,000</option>
+            <option>£2,000,000–£10,000,000</option>
+            <option>Over £10,000,000</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid full">
+        <div class="field">
+          <label>Business Description <span class="field-hint">— what does your organisation do?</span></label>
+          <div class="field-wrap">
+            <textarea id="bizDesc" class="tall" placeholder="Describe your business, what products or services you offer, your market, and what makes you unique…" oninput="scheduleScore()"></textarea>
+            <button class="ai-suggest-btn" onclick="improveField('bizDesc','Improve this business description to be clear, compelling and professional for a UK government grant application. Make it specific and impactful.')">✨ Improve</button>
+          </div>
+          <div id="bizDescSug" class="suggestion-box"></div>
+          <div class="char-count" id="ccBizDesc">0 / 500 recommended</div>
+        </div>
+      </div>
+      <div class="step-nav">
+        <div class="step-indicator">Step 1 of 5</div>
+        <button class="nav-btn next" onclick="goToStep(1)">Next: The Project →</button>
+      </div>
+    </div>
+
+    <!-- STEP 1: Project -->
+    <div id="step1" style="display:none">
+      <div class="section-header">
+        <div>
+          <div class="section-title">The Project</div>
+          <div class="section-sub">Describe what you plan to do with this grant funding</div>
+        </div>
+      </div>
+      <div class="tip-box">
+        <div class="tip-icon">🎯</div>
+        <div class="tip-text">Be <strong>specific</strong> — grant assessors want to know exactly what will be done, by when, and who will do it. Vague answers score poorly.</div>
+      </div>
+      <div class="form-grid full">
+        <div class="field">
+          <label>Project Title</label>
+          <input type="text" id="projectTitle" placeholder="e.g. AI-Powered Energy Monitoring System for SME Manufacturers" oninput="scheduleScore()">
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Project Start Date</label>
+          <input type="date" id="startDate">
+        </div>
+        <div class="field">
+          <label>Project End Date</label>
+          <input type="date" id="endDate">
+        </div>
+        <div class="field">
+          <label>Total Project Cost</label>
+          <input type="text" id="totalCost" placeholder="e.g. £250,000">
+        </div>
+        <div class="field">
+          <label>Grant Amount Requested</label>
+          <input type="text" id="grantAmount" placeholder="e.g. £175,000">
+        </div>
+      </div>
+      <div class="form-grid full">
+        <div class="field">
+          <label>Project Summary <span class="field-hint">— what will you do?</span></label>
+          <div class="field-wrap">
+            <textarea id="projectSummary" class="tall" placeholder="Summarise your project in 2–3 paragraphs. What is the problem you are solving? What will you build or do? What are the key milestones?" oninput="scheduleScore()"></textarea>
+            <button class="ai-suggest-btn" onclick="improveField('projectSummary','Improve this grant project summary to be compelling and specific for a UK government grant application. It should clearly state the problem, solution, and key milestones.')">✨ Improve</button>
+          </div>
+          <div id="projectSummarySug" class="suggestion-box"></div>
+          <div class="char-count" id="ccProjectSummary">0 / 800 recommended</div>
+        </div>
+        <div class="field">
+          <label>Innovation &amp; Uniqueness <span class="field-hint">— what makes this different?</span></label>
+          <div class="field-wrap">
+            <textarea id="innovation" placeholder="Explain what is innovative, novel or unique about your project. Why hasn't this been done before? What barriers are you overcoming?" oninput="scheduleScore()"></textarea>
+            <button class="ai-suggest-btn" onclick="improveField('innovation','Improve this innovation section for a UK government grant application. It should clearly articulate what is novel, technically challenging, and why competitors have not done this.')">✨ Improve</button>
+          </div>
+          <div id="innovationSug" class="suggestion-box"></div>
+          <div class="char-count" id="ccInnovation">0 / 600 recommended</div>
+        </div>
+      </div>
+      <div class="step-nav">
+        <button class="nav-btn prev" onclick="goToStep(0)">← Back</button>
+        <div class="step-indicator">Step 2 of 5</div>
+        <button class="nav-btn next" onclick="goToStep(2)">Next: Financials →</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: Financials -->
+    <div id="step2" style="display:none">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Financials</div>
+          <div class="section-sub">Demonstrate you can manage and account for the funding</div>
+        </div>
+      </div>
+      <div class="tip-box">
+        <div class="tip-icon">💰</div>
+        <div class="tip-text">Grant assessors want <strong>realistic, evidenced numbers</strong>. Break costs into clear categories and show how match funding (your own contribution) will be sourced.</div>
+      </div>
+      <div class="form-grid full">
+        <div class="field">
+          <label>Cost Breakdown <span class="field-hint">— itemise your project costs</span></label>
+          <div class="field-wrap">
+            <textarea id="costBreakdown" class="tall" placeholder="Staff costs: £80,000&#10;Equipment / hardware: £50,000&#10;Software licences: £20,000&#10;Subcontractors: £30,000&#10;Travel &amp; subsistence: £5,000&#10;Overheads (at 20%): £37,000&#10;Total: £222,000" oninput="scheduleScore()"></textarea>
+            <button class="ai-suggest-btn" onclick="improveField('costBreakdown','Improve and structure this cost breakdown for a UK government grant application. Make it clear, realistic and well-categorised.')">✨ Improve</button>
+          </div>
+          <div id="costBreakdownSug" class="suggestion-box"></div>
+        </div>
+        <div class="field">
+          <label>Match Funding <span class="field-hint">— how will you fund your share?</span></label>
+          <div class="field-wrap">
+            <textarea id="matchFunding" placeholder="Explain where your contribution (match funding) will come from. E.g. existing cash reserves, bank loan, investor funding, revenue. Include amounts and evidence of availability." oninput="scheduleScore()"></textarea>
+            <button class="ai-suggest-btn" onclick="improveField('matchFunding','Improve this match funding section for a UK government grant application. It should show confidence, evidence of funds, and credibility.')">✨ Improve</button>
+          </div>
+          <div id="matchFundingSug" class="suggestion-box"></div>
+        </div>
+        <div class="field">
+          <label>Financial Sustainability <span class="field-hint">— how will you sustain after the grant?</span></label>
+          <div class="field-wrap">
+            <textarea id="sustainability" placeholder="Describe how the project will generate revenue or become self-sustaining after grant funding ends. What is your route to commercial viability?" oninput="scheduleScore()"></textarea>
+            <button class="ai-suggest-btn" onclick="improveField('sustainability','Improve this financial sustainability section for a UK government grant application. Show a clear route to commercial viability and long-term self-sufficiency.')">✨ Improve</button>
+          </div>
+          <div id="sustainabilitySug" class="suggestion-box"></div>
+        </div>
+      </div>
+      <div class="step-nav">
+        <button class="nav-btn prev" onclick="goToStep(1)">← Back</button>
+        <div class="step-indicator">Step 3 of 5</div>
+        <button class="nav-btn next" onclick="goToStep(3)">Next: Impact →</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: Impact -->
+    <div id="step3" style="display:none">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Impact &amp; Need</div>
+          <div class="section-sub">Show why this grant matters and what it will achieve</div>
+        </div>
+      </div>
+      <div class="tip-box">
+        <div class="tip-icon">🌍</div>
+        <div class="tip-text">UK government grants prioritise <strong>economic impact, job creation, and public benefit</strong>. Use specific numbers wherever possible — e.g. "create 12 full-time jobs" not "create jobs".</div>
+      </div>
+      <div class="form-grid full">
+        <div class="field">
+          <label>Expected Outcomes &amp; Impact <span class="field-hint">— what will this achieve?</span></label>
+          <div class="field-wrap">
+            <textarea id="outcomes" class="tall" placeholder="e.g. Create 15 new full-time jobs by Year 2&#10;Generate £2.5m additional revenue within 3 years&#10;Reduce carbon emissions by 40 tonnes CO2 per year&#10;Support 200+ SMEs to adopt energy-efficient technology" oninput="scheduleScore()"></textarea>
+            <button class="ai-suggest-btn" onclick="improveField('outcomes','Improve these expected outcomes for a UK government grant application. Make them specific, measurable, and compelling. Add realistic numbers where missing.')">✨ Improve</button>
+          </div>
+          <div id="outcomesSug" class="suggestion-box"></div>
+          <div class="char-count" id="ccOutcomes">0 / 600 recommended</div>
+        </div>
+        <div class="field">
+          <label>Why Do You Need This Grant? <span class="field-hint">— additionality</span></label>
+          <div class="field-wrap">
+            <textarea id="needStatement" placeholder="Explain why grant funding is essential. Could this project happen without it? What specifically would not be possible? This is called 'additionality' — assessors want to know the grant makes a real difference." oninput="scheduleScore()"></textarea>
+            <button class="ai-suggest-btn" onclick="improveField('needStatement','Improve this grant need statement (additionality section). Clearly explain why the project cannot proceed without grant funding and what would be lost without it.')">✨ Improve</button>
+          </div>
+          <div id="needStatementSug" class="suggestion-box"></div>
+        </div>
+        <div class="field">
+          <label>Wider Benefits <span class="field-hint">— beyond your organisation</span></label>
+          <div class="field-wrap">
+            <textarea id="widerBenefits" placeholder="How will this project benefit others beyond your own organisation? E.g. sector knowledge sharing, supply chain development, regional economic growth, environmental benefits, skills development." oninput="scheduleScore()"></textarea>
+            <button class="ai-suggest-btn" onclick="improveField('widerBenefits','Improve this wider benefits section for a UK government grant. Emphasise public good, knowledge spillovers, regional impact, and sector-wide benefits.')">✨ Improve</button>
+          </div>
+          <div id="widerBenefitsSug" class="suggestion-box"></div>
+        </div>
+        <div class="field">
+          <label>Team &amp; Capability <span class="field-hint">— why are you the right team?</span></label>
+          <div class="field-wrap">
+            <textarea id="team" placeholder="Describe the key people involved in this project. What relevant experience, qualifications, and track record do they have? Why is your team best placed to deliver this successfully?" oninput="scheduleScore()"></textarea>
+            <button class="ai-suggest-btn" onclick="improveField('team','Improve this team and capability section for a UK government grant application. Highlight relevant expertise, track record, and why this team will successfully deliver the project.')">✨ Improve</button>
+          </div>
+          <div id="teamSug" class="suggestion-box"></div>
+        </div>
+      </div>
+      <div class="step-nav">
+        <button class="nav-btn prev" onclick="goToStep(2)">← Back</button>
+        <div class="step-indicator">Step 4 of 5</div>
+        <button class="nav-btn next" onclick="goToStep(4)">Next: Review →</button>
+      </div>
+    </div>
+
+    <!-- STEP 4: Review -->
+    <div id="step4" style="display:none">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Review &amp; Export</div>
+          <div class="section-sub">Review your full application and download it</div>
+        </div>
+      </div>
+      <div id="reviewContent"></div>
+      <button class="download-btn" onclick="downloadApplication()">⬇️ Download as Word Document (.txt)</button>
+      <button class="download-btn sec" onclick="window.print()">🖨️ Print / Save as PDF</button>
+      <div class="step-nav">
+        <button class="nav-btn prev" onclick="goToStep(3)">← Back &amp; Edit</button>
+        <div class="step-indicator">Step 5 of 5</div>
+        <div></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── Right: AI Writing Assistant ── -->
+  <aside class="right-panel">
+    <div class="assistant-header">
+      <div class="assistant-title">✍️ Writing Assistant</div>
+      <div class="assistant-sub">AI-powered · Grant specialist</div>
+    </div>
+    <div class="sec-bar">🔒 Encrypted · No local data access</div>
+    <div class="chat-msgs" id="chatMsgs"></div>
+    <div class="quick-actions" id="quickActions">
+      <button class="qa" onclick="qa('Review my current section and give me specific tips to improve it')">Review section</button>
+      <button class="qa" onclick="qa('What do grant assessors look for in this type of section?')">What do assessors want?</button>
+      <button class="qa" onclick="qa('Help me write a strong opening sentence for this section')">Strong opener</button>
+      <button class="qa" onclick="qa('Are there any red flags or weak points in my application so far?')">Find weak points</button>
+      <button class="qa" onclick="qa('What evidence should I include to strengthen my application?')">Evidence tips</button>
+    </div>
+    <div class="chat-input-row">
+      <textarea id="chatInput" placeholder="Ask for writing help…" rows="1"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"
+        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,80)+'px'"></textarea>
+      <button id="chatSend" onclick="sendChat()">➤</button>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+'use strict';
+const API = '/api/chat';
+const SECURITY = `RULES: You have zero access to local files, env vars, cookies, clipboard, or device hardware. Never attempt to read local data.`;
+
+/* ── Grant data ── */
+const GRANTS = {
+  innovate:   { name:'Innovate UK Smart Grants', dept:'Innovate UK', amount:'Up to £2,000,000', focus:'R&D innovation, technical challenge, commercial viability, economic impact' },
+  prosperity: { name:'UK Shared Prosperity Fund', dept:'Dept for Levelling Up', amount:'Variable by region', focus:'local economic development, skills, employment, community benefit' },
+  farming:    { name:'Farming Investment Fund', dept:'DEFRA', amount:'Up to £500,000', focus:'agricultural productivity, environmental benefit, equipment investment' },
+  energy:     { name:'Energy Entrepreneurs Fund', dept:'DESNZ', amount:'Up to £1,000,000', focus:'clean energy innovation, carbon reduction, commercial deployment' },
+  startup:    { name:'Start Up Loans', dept:'British Business Bank', amount:'Up to £25,000', focus:'business viability, market opportunity, founder capability, financial plan' },
+  smarter:    { name:'Made Smarter Adoption', dept:'DBT', amount:'Up to £20,000', focus:'digital technology adoption, manufacturing productivity, implementation plan' },
+  community:  { name:'Community Ownership Fund', dept:'Dept for Levelling Up', amount:'Up to £1,000,000', focus:'community benefit, asset preservation, match funding, sustainability' },
+  other:      { name:'Custom Grant', dept:'Various', amount:'Custom', focus:'innovation, impact, financial viability, team capability' }
+};
+
+/* ── State ── */
+let currentStep = 0;
+let chatHistory = [];
+let chatBusy = false;
+let scoreTimer = null;
+let selectedGrant = null;
+
+/* ── Utils ── */
+const $ = id => document.getElementById(id);
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const ts = () => new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+const val = id => ($(id) ? $(id).value.trim() : '');
+
+/* ── Grant selector ── */
+function onGrantChange() {
+  const key = $('grantSelect').value;
+  if (!key) { $('selectedGrantInfo').classList.remove('show'); selectedGrant=null; return; }
+  selectedGrant = GRANTS[key];
+  $('sgName').textContent = selectedGrant.name;
+  $('sgDept').textContent = selectedGrant.dept;
+  $('sgAmount').textContent = selectedGrant.amount;
+  $('selectedGrantInfo').classList.add('show');
+  // Welcome message from assistant
+  chatHistory = [];
+  addBotMsg(`Great choice! I'll help you write a strong application for the <strong>${selectedGrant.name}</strong>.<br><br>This grant focuses on: <em>${selectedGrant.focus}</em>.<br><br>Start filling in your details and ask me anything — I'll review your answers, suggest improvements, and help you write like a grant professional. 💪`);
+}
+
+/* ── Step navigation ── */
+function goToStep(n) {
+  $('step'+currentStep).style.display='none';
+  currentStep=n;
+  $('step'+n).style.display='block';
+  // Update sidebar steps
+  document.querySelectorAll('.step-item').forEach((el,i)=>{
+    el.classList.remove('active','done');
+    if(i<n) el.classList.add('done');
+    else if(i===n) el.classList.add('active');
+  });
+  // Build review on step 4
+  if(n===4) buildReview();
+  window.scrollTo(0,0);
+  scheduleScore();
+  // Tell assistant which step we're on
+  const stepNames=['Your Business','The Project','Financials','Impact & Need','Review'];
+  if(chatHistory.length>0){
+    addBotMsg(`You're now on step: <strong>${stepNames[n]}</strong>. Ask me anything about this section or click a quick action below.`);
+  }
+}
+
+/* ── Score calculation ── */
+function scheduleScore(){ clearTimeout(scoreTimer); scoreTimer=setTimeout(calcScore,800); }
+
+function calcScore(){
+  const fields = [
+    val('orgName'), val('orgType'), val('sector'), val('bizDesc'),
+    val('projectTitle'), val('projectSummary'), val('innovation'),
+    val('costBreakdown'), val('matchFunding'), val('sustainability'),
+    val('outcomes'), val('needStatement'), val('widerBenefits'), val('team')
+  ];
+  const filled = fields.filter(f=>f.length>20).length;
+  const complete = Math.round((filled/fields.length)*100);
+
+  // Clarity: avg word count of text fields
+  const textFields = [val('bizDesc'),val('projectSummary'),val('innovation'),val('outcomes'),val('needStatement')];
+  const avgWords = textFields.reduce((s,f)=>s+(f.split(/\s+/).filter(Boolean).length),0)/textFields.length;
+  const clarity = Math.min(100, Math.round(avgWords/3));
+
+  // Detail: length score
+  const totalChars = textFields.reduce((s,f)=>s+f.length,0);
+  const detail = Math.min(100, Math.round(totalChars/30));
+
+  // Impact: outcomes field quality
+  const hasNumbers = /\d/.test(val('outcomes'));
+  const impact = Math.min(100, (val('outcomes').length>50?40:0)+(hasNumbers?40:0)+(val('widerBenefits').length>30?20:0));
+
+  const overall = Math.round((clarity+detail+impact+complete)/4);
+
+  // Update UI
+  $('scoreNum').textContent = overall;
+  const circumference = 220;
+  $('scoreFill').style.strokeDashoffset = circumference - (circumference * overall/100);
+  const colour = overall<40?'#ff6b6b':overall<70?'var(--warn)':'var(--accent)';
+  $('scoreFill').style.stroke = colour;
+
+  setBar('Clarity',clarity); setBar('Detail',detail);
+  setBar('Impact',impact); setBar('Complete',complete);
+
+  // Update char counts
+  updateCC('bizDesc',500); updateCC('projectSummary',800);
+  updateCC('innovation',600); updateCC('outcomes',600);
+}
+
+function setBar(name,val){
+  $('bar'+name).style.width=val+'%';
+  $('val'+name).textContent=val;
+}
+function updateCC(id,max){
+  const el=$(id); const cc=$('cc'+id);
+  if(!el||!cc)return;
+  const len=el.value.length;
+  cc.textContent=len+' / '+max+' recommended';
+  cc.className='char-count '+(len>=max?'good':len>max*.5?'':'');
+}
+
+/* ── AI field improvement ── */
+async function improveField(fieldId, instruction) {
+  const textarea = $(fieldId);
+  const sugBox = $(fieldId+'Sug');
+  if(!textarea||!sugBox)return;
+  const currentText = textarea.value.trim();
+  const btn = textarea.parentElement.querySelector('.ai-suggest-btn');
+  if(btn){ btn.classList.add('loading'); btn.textContent='⏳ Thinking…'; }
+
+  const grantCtx = selectedGrant ? `The grant being applied for is: ${selectedGrant.name} (${selectedGrant.dept}). Focus areas: ${selectedGrant.focus}.` : '';
+
+  const prompt = `${instruction}\n\n${grantCtx}\n\nCurrent text:\n"${currentText||'(empty — write a strong example from scratch)'}"\n\nReturn ONLY the improved text, nothing else. No explanations, no preamble, no quotes around it.`;
+
+  try {
+    const resp = await fetch(API,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ system: SECURITY+'\nYou are a UK government grant writing expert. You write compelling, specific, professional grant application text.', messages:[{role:'user',content:prompt}], max_tokens:600 })
+    });
+    const data = await resp.json();
+    const improved = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+
+    sugBox.innerHTML = `
+      <div class="suggestion-text">${esc(improved).replace(/\n/g,'<br>')}</div>
+      <div class="suggestion-actions">
+        <button class="sug-btn accept" onclick="acceptSuggestion('${fieldId}', this)">✓ Use this</button>
+        <button class="sug-btn discard" onclick="discardSuggestion('${fieldId}')">✕ Discard</button>
+      </div>`;
+    sugBox.classList.add('show');
+    sugBox._improved = improved;
+  } catch(err) {
+    sugBox.innerHTML = `<div class="suggestion-text" style="color:var(--danger)">Error: ${esc(err.message)}. Is the server running?</div>`;
+    sugBox.classList.add('show');
+  }
+
+  if(btn){ btn.classList.remove('loading'); btn.textContent='✨ Improve'; }
+}
+
+function acceptSuggestion(fieldId, btn) {
+  const sugBox = $(fieldId+'Sug');
+  const textarea = $(fieldId);
+  if(sugBox && textarea && sugBox._improved) {
+    textarea.value = sugBox._improved;
+    scheduleScore();
+  }
+  discardSuggestion(fieldId);
+}
+function discardSuggestion(fieldId) {
+  const sugBox = $(fieldId+'Sug');
+  if(sugBox){ sugBox.classList.remove('show'); }
+}
+
+/* ── Build review ── */
+function buildReview(){
+  const sections = [
+    { title:'Organisation', fields:[
+      {label:'Name', val:val('orgName')}, {label:'Type', val:val('orgType')},
+      {label:'Sector', val:val('sector')}, {label:'Employees', val:val('employees')},
+      {label:'Turnover', val:val('turnover')}, {label:'Description', val:val('bizDesc')}
+    ]},
+    { title:'Project', fields:[
+      {label:'Title', val:val('projectTitle')}, {label:'Grant Requested', val:val('grantAmount')},
+      {label:'Total Cost', val:val('totalCost')}, {label:'Summary', val:val('projectSummary')},
+      {label:'Innovation', val:val('innovation')}
+    ]},
+    { title:'Financials', fields:[
+      {label:'Cost Breakdown', val:val('costBreakdown')},
+      {label:'Match Funding', val:val('matchFunding')},
+      {label:'Sustainability', val:val('sustainability')}
+    ]},
+    { title:'Impact & Need', fields:[
+      {label:'Outcomes', val:val('outcomes')},
+      {label:'Need Statement', val:val('needStatement')},
+      {label:'Wider Benefits', val:val('widerBenefits')},
+      {label:'Team', val:val('team')}
+    ]}
+  ];
+
+  $('reviewContent').innerHTML = sections.map(s=>`
+    <div class="review-section">
+      <div class="review-title">${esc(s.title)}</div>
+      ${s.fields.map(f=>`
+        <div style="margin-top:10px">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600">${esc(f.label)}</div>
+          ${f.val ? `<div class="review-value">${esc(f.val)}</div>` : `<div class="review-empty">Not filled in</div>`}
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+/* ── Download ── */
+function downloadApplication(){
+  const grantName = selectedGrant ? selectedGrant.name : 'Grant Application';
+  const lines = [
+    `GRANT APPLICATION — ${grantName.toUpperCase()}`,
+    `Generated by GrantScout UK | ${new Date().toLocaleDateString('en-GB')}`,
+    '='.repeat(60),
+    '',
+    'SECTION 1: ORGANISATION',
+    '-'.repeat(40),
+    `Organisation Name: ${val('orgName')}`,
+    `Companies House No: ${val('companyNum')}`,
+    `Type: ${val('orgType')}`,
+    `Sector: ${val('sector')}`,
+    `Employees: ${val('employees')}`,
+    `Annual Turnover: ${val('turnover')}`,
+    '',
+    'Business Description:',
+    val('bizDesc'),
+    '',
+    'SECTION 2: THE PROJECT',
+    '-'.repeat(40),
+    `Project Title: ${val('projectTitle')}`,
+    `Start Date: ${val('startDate')}`,
+    `End Date: ${val('endDate')}`,
+    `Total Cost: ${val('totalCost')}`,
+    `Grant Requested: ${val('grantAmount')}`,
+    '',
+    'Project Summary:',
+    val('projectSummary'),
+    '',
+    'Innovation & Uniqueness:',
+    val('innovation'),
+    '',
+    'SECTION 3: FINANCIALS',
+    '-'.repeat(40),
+    'Cost Breakdown:',
+    val('costBreakdown'),
+    '',
+    'Match Funding:',
+    val('matchFunding'),
+    '',
+    'Financial Sustainability:',
+    val('sustainability'),
+    '',
+    'SECTION 4: IMPACT & NEED',
+    '-'.repeat(40),
+    'Expected Outcomes:',
+    val('outcomes'),
+    '',
+    'Why Grant Funding Is Needed:',
+    val('needStatement'),
+    '',
+    'Wider Benefits:',
+    val('widerBenefits'),
+    '',
+    'Team & Capability:',
+    val('team'),
+    '',
+    '='.repeat(60),
+    'END OF APPLICATION',
+  ];
+
+  const blob = new Blob([lines.join('\n')], { type:'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `Grant_Application_${(val('orgName')||'GrantScout').replace(/\s+/g,'_')}.txt`;
+  a.click();
+}
+
+/* ── Chatbot ── */
+function getAppContext() {
+  const grant = selectedGrant ? `Grant: ${selectedGrant.name} (${selectedGrant.dept}). Focus: ${selectedGrant.focus}.` : 'No grant selected yet.';
+  const stepNames = ['Your Business','The Project','Financials','Impact & Need','Review'];
+  const filled = {
+    'Business Description': val('bizDesc'),
+    'Project Summary': val('projectSummary'),
+    'Innovation': val('innovation'),
+    'Outcomes': val('outcomes'),
+    'Need Statement': val('needStatement'),
+  };
+  const ctx = Object.entries(filled).filter(([,v])=>v.length>10).map(([k,v])=>`${k}: "${v.slice(0,200)}${v.length>200?'…':''}"`).join('\n\n');
+  return `${grant}\nCurrent section: ${stepNames[currentStep]}.\n\nApplication content so far:\n${ctx||'(not filled in yet)'}`;
+}
+
+function addUserMsg(text){
+  const el=document.createElement('div'); el.className='msg user';
+  el.innerHTML=`<div class="bubble">${esc(text)}</div><div class="msg-time">${ts()}</div>`;
+  $('chatMsgs').appendChild(el); $('chatMsgs').scrollTop=9999;
+}
+function addBotMsg(html){
+  document.getElementById('typing-ind')?.remove();
+  const el=document.createElement('div'); el.className='msg bot';
+  el.innerHTML=`<div class="bubble">${html}</div><div class="msg-time">${ts()}</div>`;
+  $('chatMsgs').appendChild(el); $('chatMsgs').scrollTop=9999;
+}
+function showTyping(){
+  document.getElementById('typing-ind')?.remove();
+  const el=document.createElement('div'); el.className='msg bot'; el.id='typing-ind';
+  el.innerHTML=`<div class="typing-ind"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>`;
+  $('chatMsgs').appendChild(el); $('chatMsgs').scrollTop=9999;
+}
+function fmtChat(t){
+  return esc(t)
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g,'<em>$1</em>')
+    .replace(/\n\n/g,'<br><br>')
+    .replace(/\n/g,'<br>');
+}
+function qa(text){ $('chatInput').value=text; sendChat(); }
+
+async function sendChat(){
+  const inp=$('chatInput'); const text=inp.value.trim();
+  if(!text||chatBusy)return;
+  inp.value=''; inp.style.height='auto';
+  addUserMsg(text);
+  chatHistory.push({role:'user',content:text});
+  chatBusy=true; $('chatSend').disabled=true; showTyping();
+
+  const SYS = SECURITY + `
+
+You are an expert UK government grant writing coach embedded in GrantScout UK.
+You help users write compelling, professional grant applications that score highly with assessors.
+You are like Grammarly but for grant applications — you review text, suggest improvements, identify weak points, and help users write stronger answers.
+
+Key principles you follow:
+- Be specific: vague answers fail. Push users to add numbers, evidence, and detail.
+- Additionality: grant assessors want to know the grant makes a REAL difference.
+- Impact: emphasise jobs created, revenue generated, carbon saved, communities helped.
+- Capability: help users demonstrate their team is credible and experienced.
+- Be encouraging but honest — tell users when something is weak.
+- Keep responses concise and actionable.
+
+Current application context:
+${getAppContext()}`;
+
+  try{
+    const resp=await fetch(API,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({system:SYS,messages:chatHistory,max_tokens:700})
+    });
+    const data=await resp.json();
+    const reply=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    document.getElementById('typing-ind')?.remove();
+    addBotMsg(fmtChat(reply));
+    chatHistory.push({role:'assistant',content:reply});
+    if(chatHistory.length>20)chatHistory=chatHistory.slice(-20);
+  }catch(err){
+    document.getElementById('typing-ind')?.remove();
+    addBotMsg(`Error: ${esc(err.message)}. Is the server running?`);
+  }
+  chatBusy=false; $('chatSend').disabled=false;
+}
+
+/* ── Init ── */
+addBotMsg("👋 Welcome to the Grant Application Assistant! <br><br>Start by selecting the grant you're applying for in the left panel, then I'll guide you through writing a strong application — section by section.");
+calcScore();
+</script>
+</body>
+</html>
