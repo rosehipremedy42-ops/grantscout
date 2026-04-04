@@ -23,11 +23,40 @@ const MIME = {
   '.ico':  'image/x-icon',
 };
 
-// ── Helper: sleep ──────────────────────────────────────────────────────────
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+// ── Sleep helper ───────────────────────────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// ── Helper: call Anthropic with automatic retry on 429 ─────────────────────
-async function callAnthropic(payload, retries = 3) {
+// ── Request queue — only ONE Anthropic call at a time ─────────────────────
+// This prevents concurrent requests from both pages hammering the rate limit
+let queueRunning = false;
+const queue = [];
+
+function enqueue(task) {
+  return new Promise((resolve, reject) => {
+    queue.push({ task, resolve, reject });
+    processQueue();
+  });
+}
+
+async function processQueue() {
+  if (queueRunning || queue.length === 0) return;
+  queueRunning = true;
+  const { task, resolve, reject } = queue.shift();
+  try {
+    const result = await task();
+    resolve(result);
+  } catch (err) {
+    reject(err);
+  } finally {
+    queueRunning = false;
+    // Small gap between requests to be kind to rate limits
+    await sleep(300);
+    processQueue();
+  }
+}
+
+// ── Call Anthropic with retry on 429 ──────────────────────────────────────
+async function callAnthropic(payload, retries = 4) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     const result = await new Promise((resolve, reject) => {
       const options = {
@@ -54,29 +83,19 @@ async function callAnthropic(payload, retries = 3) {
       apiReq.end();
     });
 
-    // Success or non-retryable error — return immediately
-    if (result.status !== 429 && result.status !== 529) {
-      return result;
-    }
+    // Success or non-retryable error
+    if (result.status !== 429 && result.status !== 529) return result;
 
-    // Rate limited — parse retry-after header or use exponential backoff
-    let waitMs = Math.pow(2, attempt) * 2000; // 4s, 8s, 16s
+    // Work out how long to wait
+    let waitMs = Math.pow(2, attempt) * 3000; // 6s, 12s, 24s, 48s
     try {
       const parsed = JSON.parse(result.body);
-      // Anthropic sometimes includes retry_after in the error
-      if (parsed.error && parsed.error.retry_after) {
-        waitMs = parsed.error.retry_after * 1000;
-      }
+      if (parsed.error && parsed.error.retry_after) waitMs = parsed.error.retry_after * 1000 + 500;
     } catch (_) {}
 
-    console.log(`Rate limited (429). Attempt ${attempt}/${retries}. Waiting ${waitMs/1000}s...`);
-
-    if (attempt < retries) {
-      await sleep(waitMs);
-    } else {
-      // Exhausted retries — return the 429 so the client knows
-      return result;
-    }
+    console.log(`429 rate limit. Attempt ${attempt}/${retries}. Waiting ${waitMs/1000}s…`);
+    if (attempt < retries) await sleep(waitMs);
+    else return result; // Return 429 to client after exhausting retries
   }
 }
 
@@ -88,7 +107,7 @@ http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
-  // ── API proxy with retry ──
+  // ── API proxy with queue + retry ──
   if (req.method === 'POST' && req.url === '/api/chat') {
     let body = '';
     req.on('data', chunk => body += chunk);
@@ -104,7 +123,8 @@ http.createServer((req, res) => {
       const payload = JSON.stringify(parsed);
 
       try {
-        const result = await callAnthropic(payload);
+        // Queue the request — prevents concurrent calls that cause 429s
+        const result = await enqueue(() => callAnthropic(payload));
         res.writeHead(result.status, { 'Content-Type': 'application/json' });
         res.end(result.body);
       } catch (err) {
