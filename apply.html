@@ -530,7 +530,7 @@ mark.ai-highlight.good{background:rgba(0,229,160,.08);border-bottom-color:var(--
       </div>
       <div id="reviewContent"></div>
       <button class="download-btn" onclick="downloadApplication()">⬇️ Download as Word Document (.docx)</button>
-      <button class="download-btn sec" onclick="window.print()">🖨️ Print / Save as PDF</button>
+      <button class="download-btn sec" onclick="printApplication()">🖨️ Print / Save as PDF</button>
       <div class="step-nav">
         <button class="nav-btn prev" onclick="goToStep(3)">← Back &amp; Edit</button>
         <div class="step-indicator">Step 5 of 5</div>
@@ -806,6 +806,183 @@ async function downloadApplication(){
 
   if(btn){ btn.textContent='⬇️ Download as Word Document (.docx)'; btn.disabled=false; }
 }
+
+function printApplication(){
+  const grantName = selectedGrant ? selectedGrant.name : 'Grant Application';
+  const orgName   = val('orgName') || 'Organisation';
+  const today     = new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+
+  function pEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function block(label, value){
+    if(!value || !value.trim()) return `
+      <div class="field">
+        <div class="flabel">${pEsc(label)}</div>
+        <div class="fvalue empty">Not provided</div>
+      </div>`;
+    return `
+      <div class="field">
+        <div class="flabel">${pEsc(label)}</div>
+        <div class="fvalue">${pEsc(value).replace(/\n/g,'<br>')}</div>
+      </div>`;
+  }
+
+  function kv(label, value){
+    return `<div class="kv"><span class="kvk">${pEsc(label)}:</span> <span class="kvv">${pEsc(value||'—')}</span></div>`;
+  }
+
+  function section(num, title, content){
+    return `
+      <div class="section">
+        <div class="section-heading"><span class="section-num">${num}</span>${pEsc(title)}</div>
+        ${content}
+      </div>`;
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Grant Application — ${pEsc(grantName)}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap');
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:'DM Sans',Arial,sans-serif; font-size:11pt; color:#1a1a1a; background:#fff; padding:0; }
+
+  /* Cover */
+  .cover{ text-align:center; padding:60px 48px 48px; border-bottom:3px solid #00e5a0; margin-bottom:0; }
+  .cover-tag{ font-size:9pt; letter-spacing:3px; text-transform:uppercase; color:#00e5a0; font-weight:600; margin-bottom:12px; }
+  .cover-title{ font-family:'DM Serif Display',Georgia,serif; font-size:28pt; color:#0a0e1a; line-height:1.2; margin-bottom:10px; }
+  .cover-org{ font-size:14pt; color:#4f6dff; font-weight:600; margin-bottom:8px; }
+  .cover-date{ font-size:9pt; color:#999; }
+
+  /* Sections */
+  .section{ padding:32px 48px; border-bottom:1px solid #eee; page-break-inside:avoid; }
+  .section:last-child{ border-bottom:none; }
+  .section-heading{
+    font-family:'DM Serif Display',Georgia,serif;
+    font-size:15pt; color:#0a0e1a;
+    display:flex; align-items:center; gap:12px;
+    margin-bottom:20px; padding-bottom:10px;
+    border-bottom:2px solid #00e5a0;
+  }
+  .section-num{
+    width:28px; height:28px; border-radius:50%;
+    background:#00e5a0; color:#0a0e1a;
+    display:inline-flex; align-items:center; justify-content:center;
+    font-size:11pt; font-weight:700; flex-shrink:0;
+    font-family:'DM Mono',monospace;
+  }
+
+  /* Key-value rows */
+  .kv{ display:flex; gap:8px; margin-bottom:7px; font-size:10.5pt; }
+  .kvk{ font-weight:600; color:#444; min-width:170px; flex-shrink:0; }
+  .kvv{ color:#1a1a1a; }
+
+  /* Field blocks */
+  .field{ margin-top:18px; }
+  .flabel{ font-size:9pt; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#4f6dff; margin-bottom:6px; }
+  .fvalue{ font-size:10.5pt; line-height:1.7; color:#1a1a1a; white-space:pre-wrap; background:#f9f9f9; border-left:3px solid #e0e0e0; padding:10px 14px; border-radius:0 4px 4px 0; }
+  .fvalue.empty{ color:#aaa; font-style:italic; background:none; border-left:none; padding:0; }
+
+  /* Footer */
+  .footer{ text-align:center; padding:24px 48px; font-size:8pt; color:#aaa; background:#f9f9f9; }
+
+  /* Print settings */
+  @media print{
+    @page{ margin:15mm 18mm; size:A4; }
+    .cover{ padding:30px 0 24px; }
+    .section{ padding:24px 0; }
+    .footer{ padding:16px 0; }
+    body{ font-size:10pt; }
+    .no-print{ display:none !important; }
+  }
+
+  /* Screen only */
+  @media screen{
+    body{ max-width:800px; margin:0 auto; box-shadow:0 0 40px rgba(0,0,0,.1); min-height:100vh; }
+    .print-bar{
+      position:sticky; top:0; z-index:99;
+      background:#0a0e1a; padding:12px 48px;
+      display:flex; justify-content:space-between; align-items:center;
+      gap:12px;
+    }
+    .print-bar span{ color:#e2e8f8; font-size:13px; }
+    .print-btn{
+      padding:9px 20px; border-radius:8px; border:none; cursor:pointer;
+      font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600;
+      transition:all .2s;
+    }
+    .print-btn.go{ background:#00e5a0; color:#0a0e1a; }
+    .print-btn.go:hover{ box-shadow:0 4px 16px rgba(0,229,160,.4); }
+    .print-btn.close{ background:transparent; color:#6b7a9e; border:1px solid #252d45; }
+    .print-btn.close:hover{ color:#e2e8f8; }
+  }
+</style>
+</head>
+<body>
+
+<div class="print-bar no-print">
+  <span>📄 Print preview — looks exactly like the Word document</span>
+  <div style="display:flex;gap:8px;">
+    <button class="print-btn go" onclick="window.print()">🖨️ Print / Save as PDF</button>
+    <button class="print-btn close" onclick="window.close()">✕ Close</button>
+  </div>
+</div>
+
+<div class="cover">
+  <div class="cover-tag">Grant Application</div>
+  <div class="cover-title">${pEsc(grantName)}</div>
+  <div class="cover-org">${pEsc(orgName)}</div>
+  <div class="cover-date">Generated by GrantScout UK &nbsp;·&nbsp; ${pEsc(today)}</div>
+</div>
+
+${section(1,'Your Organisation',
+  kv('Organisation Name', val('orgName')) +
+  kv('Companies House No', val('companyNum')) +
+  kv('Organisation Type', val('orgType')) +
+  kv('Sector / Industry', val('sector')) +
+  kv('Number of Employees', val('employees')) +
+  kv('Annual Turnover', val('turnover')) +
+  block('Business Description', val('bizDesc'))
+)}
+
+${section(2,'The Project',
+  kv('Project Title', val('projectTitle')) +
+  kv('Start Date', val('startDate')) +
+  kv('End Date', val('endDate')) +
+  kv('Total Project Cost', val('totalCost')) +
+  kv('Grant Amount Requested', val('grantAmount')) +
+  block('Project Summary', val('projectSummary')) +
+  block('Innovation & Uniqueness', val('innovation'))
+)}
+
+${section(3,'Financials',
+  block('Cost Breakdown', val('costBreakdown')) +
+  block('Match Funding', val('matchFunding')) +
+  block('Financial Sustainability', val('sustainability'))
+)}
+
+${section(4,'Impact & Need',
+  block('Expected Outcomes & Impact', val('outcomes')) +
+  block('Why Grant Funding Is Needed', val('needStatement')) +
+  block('Wider Benefits', val('widerBenefits')) +
+  block('Team & Capability', val('team'))
+)}
+
+<div class="footer">
+  Generated by GrantScout UK &nbsp;·&nbsp; ${pEsc(today)}
+</div>
+
+</body>
+</html>`;
+
+  const w = window.open('','_blank','width=900,height=800');
+  if(!w){ alert('Please allow popups for this site to use the print function.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
 
 function xmlEsc(s){
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
