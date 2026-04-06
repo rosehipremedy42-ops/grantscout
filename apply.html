@@ -197,8 +197,10 @@ mark.ai-highlight.good{background:rgba(0,229,160,.08);border-bottom-color:var(--
         <a class="nav-link" href="index.html">🔍 Find Grants</a>
         <a class="nav-link active" href="apply.html">✍️ Apply</a>
       </nav>
-      <div class="badges">
-        <span class="badge sec">🔒 SECURE</span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div id="tierBadge" style="font-family:'DM Mono',monospace;font-size:10px;padding:3px 8px;border-radius:4px;letter-spacing:1px;display:none;"></div>
+        <button id="upgradeBtn" onclick="doUpgrade()" style="display:none;font-size:12px;padding:6px 14px;border-radius:7px;border:none;background:var(--accent);color:var(--navy);font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;">⭐ Upgrade £9.99/mo</button>
+        <button onclick="doLogout()" style="font-size:12px;padding:6px 14px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;cursor:pointer;">Log Out</button>
       </div>
     </div>
   </div>
@@ -1329,9 +1331,153 @@ ${getAppContext()}`;
   chatBusy=false; $('chatSend').disabled=false;
 }
 
-/* ── Init ── */
-addBotMsg("👋 Welcome to the Grant Application Assistant! <br><br>Start by selecting the grant you're applying for in the left panel, then I'll guide you through writing a strong application — section by section.");
+
+/* ── Auth helpers ── */
+function authHeaders(){ return {'Content-Type':'application/json','Authorization':'Bearer '+(localStorage.getItem('gs_token')||'')}; }
+
+function showUpgradeModal(msg){
+  let m=document.getElementById('upgradeModal');
+  if(!m){
+    m=document.createElement('div');
+    m.id='upgradeModal';
+    m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;';
+    m.innerHTML=`<div style="background:var(--panel);border:1px solid var(--border);border-radius:16px;max-width:400px;width:100%;padding:28px;text-align:center;">
+      <div style="font-size:32px;margin-bottom:12px;">⭐</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--white);margin-bottom:8px;">Upgrade to Premium</div>
+      <div id="upgradeModalMsg" style="font-size:14px;color:var(--muted);margin-bottom:20px;line-height:1.6;"></div>
+      <div style="background:var(--ink);border:1px solid rgba(0,229,160,.2);border-radius:10px;padding:14px;margin-bottom:20px;">
+        <div style="font-family:'DM Mono',monospace;font-size:24px;color:var(--accent);">£9.99<span style="font-size:14px;color:var(--muted)">/month</span></div>
+        <div style="font-size:12px;color:var(--text);margin-top:6px;line-height:1.7;">Unlimited applications · Full AI assistant<br>All improve sections · Score feature<br>Apple Pay · Google Pay · Card</div>
+      </div>
+      <button onclick="doUpgrade()" style="width:100%;padding:13px;background:var(--accent);color:var(--navy);border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px;">Upgrade Now</button>
+      <button onclick="document.getElementById('upgradeModal').remove()" style="width:100%;padding:10px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer;">Maybe Later</button>
+    </div>`;
+    document.body.appendChild(m);
+    m.addEventListener('click',e=>{if(e.target===m)m.remove();});
+  }
+  document.getElementById('upgradeModalMsg').textContent=msg;
+}
+
+async function doUpgrade(){
+  const r=await fetch('/api/checkout',{method:'POST',headers:{'Authorization':'Bearer '+(localStorage.getItem('gs_token')||'')}});
+  const d=await r.json();
+  if(d.url) window.location.href=d.url;
+}
+async function doManage(){
+  const r=await fetch('/api/portal',{method:'POST',headers:{'Authorization':'Bearer '+(localStorage.getItem('gs_token')||'')}});
+  const d=await r.json();
+  if(d.url) window.location.href=d.url;
+}
+function doLogout(){
+  localStorage.removeItem('gs_token');localStorage.removeItem('gs_email');localStorage.removeItem('gs_tier');
+  window.location.href='login.html';
+}
+
+function initAuth(){
+  if(!localStorage.getItem('gs_token')){ window.location.href='login.html'; return; }
+  const tier=localStorage.getItem('gs_tier')||'free';
+  const badge=document.getElementById('tierBadge'); badge.style.display='';
+  if(tier==='premium'){
+    badge.textContent='⭐ PREMIUM';
+    badge.style.cssText+='background:rgba(0,229,160,.1);color:var(--accent);border:1px solid rgba(0,229,160,.3);';
+  } else {
+    badge.textContent='FREE';
+    badge.style.cssText+='background:rgba(107,122,158,.1);color:var(--muted);border:1px solid var(--border);';
+    document.getElementById('upgradeBtn').style.display='';
+    // Lock score panel visually
+    const scoreCard=document.querySelector('.score-card');
+    if(scoreCard){
+      const lock=document.createElement('div');
+      lock.style.cssText='position:absolute;inset:0;background:rgba(10,14,26,.8);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;z-index:5;';
+      lock.innerHTML='<div style="font-size:24px">🔒</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0 12px">Score unlocked<br>with Premium</div><button onclick="doUpgrade()" style="font-size:11px;padding:5px 12px;border-radius:6px;border:none;background:var(--accent);color:var(--navy);font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:4px;">Upgrade</button>';
+      scoreCard.style.position='relative';
+      scoreCard.appendChild(lock);
+    }
+    // Disable improve buttons outside project section
+    document.querySelectorAll('.ai-suggest-btn').forEach(btn=>{
+      const section=btn.closest('#step1');
+      if(!section){
+        btn.disabled=true; btn.style.opacity='.4'; btn.title='Upgrade to Premium to use AI Improve on all sections';
+        btn.onclick=e=>{e.preventDefault();showUpgradeModal('The AI Improve feature is only available on the Project section for free users. Upgrade to Premium to unlock it on all sections.');};
+      }
+    });
+  }
+  if(location.search.includes('upgraded=1')){
+    localStorage.setItem('gs_tier','premium');
+    history.replaceState({},'',location.pathname);
+    location.reload();
+  }
+}
+
+/* ── Override sendChat + improveField to include auth + action ── */
+const _origSendChat = sendChat;
+sendChat = async function(){
+  const inp=$('chatInput'); const text=inp.value.trim();
+  if(!text||chatBusy)return;
+  inp.value=''; inp.style.height='auto';
+  $('qchips').style.display='none';
+  addUserMsg(text);
+  chatHistory.push({role:'user',content:text});
+  chatBusy=true; $('chatSend').disabled=true; showTyping();
+
+  const tier=localStorage.getItem('gs_tier')||'free';
+  const action = tier==='free' ? 'application' : 'chat';
+
+  const SYS=SECURITY+`\nYou are an expert UK government grant writing coach. Help users write compelling applications.\n${getAppContext()}`;
+  try{
+    const resp=await fetch(API,{method:'POST',headers:authHeaders(),
+      body:JSON.stringify({_action:action,system:SYS,messages:chatHistory,max_tokens:700})});
+    if(resp.status===401){window.location.href='login.html';return;}
+    const data=await resp.json();
+    if(resp.status===403){document.getElementById('typing-ind')?.remove();showUpgradeModal(data.error||'Upgrade required');chatBusy=false;$('chatSend').disabled=false;return;}
+    const reply=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    document.getElementById('typing-ind')?.remove();
+    addBotMsg(fmtChat(reply));
+    chatHistory.push({role:'assistant',content:reply});
+    if(chatHistory.length>20)chatHistory=chatHistory.slice(-20);
+  }catch(err){
+    document.getElementById('typing-ind')?.remove();
+    addBotMsg('Error: '+esc(err.message));
+  }
+  chatBusy=false; $('chatSend').disabled=false;
+};
+
+/* ── Override improveField to include auth ── */
+const _origImprove = improveField;
+improveField = async function(fieldId, instruction){
+  const tier=localStorage.getItem('gs_tier')||'free';
+  const isProjectSection = fieldId==='projectSummary'||fieldId==='innovation'||fieldId==='projectTitle';
+  if(tier!=='premium'&&!isProjectSection){
+    showUpgradeModal('The AI Improve feature is only available on the Project section for free users. Upgrade to Premium to unlock all sections.');
+    return;
+  }
+  const textarea=$(fieldId); const sugBox=$(fieldId+'Sug');
+  if(!textarea||!sugBox)return;
+  const currentText=textarea.value.trim();
+  const btn=textarea.parentElement.querySelector('.ai-suggest-btn');
+  if(btn){btn.classList.add('loading');btn.textContent='⏳ Thinking…';}
+  const grantCtx=selectedGrant?`Grant: ${selectedGrant.name}. Focus: ${selectedGrant.focus}.`:'';
+  const prompt=`${instruction}\n\n${grantCtx}\n\nCurrent text:\n"${currentText||'(empty)'}"\n\nReturn ONLY the improved text.`;
+  try{
+    const resp=await fetch(API,{method:'POST',headers:authHeaders(),
+      body:JSON.stringify({_action:'chat',system:SECURITY+'\nYou are a UK grant writing expert.',messages:[{role:'user',content:prompt}],max_tokens:600})});
+    if(resp.status===401){window.location.href='login.html';return;}
+    const data=await resp.json();
+    if(resp.status===403){showUpgradeModal(data.error||'Upgrade required');return;}
+    const improved=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    sugBox.innerHTML=`<div class="suggestion-text">${esc(improved).replace(/\n/g,'<br>')}</div><div class="suggestion-actions"><button class="sug-btn accept" onclick="acceptSuggestion('${fieldId}',this)">✓ Use this</button><button class="sug-btn discard" onclick="discardSuggestion('${fieldId}')">✕ Discard</button></div>`;
+    sugBox._improved=improved; sugBox.classList.add('show');
+  }catch(err){
+    sugBox.innerHTML=`<div class="suggestion-text" style="color:var(--danger)">Error: ${esc(err.message)}</div>`;
+    sugBox.classList.add('show');
+  }
+  if(btn){btn.classList.remove('loading');btn.textContent='✨ Improve';}
+};
+
+initAuth();
+addBotMsg("👋 Welcome! Select your grant above to begin. I'll guide you through each section.");
 calcScore();
+
 </script>
 </body>
 </html>
