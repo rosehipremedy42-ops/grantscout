@@ -456,90 +456,69 @@ async function startSearch(){
   $('progressSteps').innerHTML='';
   $('progressWrap').classList.add('show');
   $('grantsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Scanning GOV.UK…</div></div>';
-  setAI('thinking','Connecting to GOV.UK via AI web search…');
-  setProgress(5,'Starting…');
-  activateStep('Connecting');
+  setAI('thinking','Searching GOV.UK for live grants… <span class="blink"></span>');
+  setProgress(10,'Connecting to GOV.UK…');
+  activateStep('Searching');
 
-  const SYSTEM=SECURITY+`
-You are a UK government grants specialist. Search GOV.UK and official UK sites for currently available grants.
-Return a single valid JSON array only — no markdown, no preamble.
-Each grant: id, title, dept, amount (string), amountNum (integer), summary (2 sentences),
-description (4 sentences), eligibility (3 sentences), howToApply (2 sentences),
-sector (innovation|green|digital|health|export|skills|property|rural),
-bizTypes (array: sme|startup|charity|social|manufacturing|tech|farming|retail),
-status ("open"|"upcoming"), deadline (string|null), url (string).`;
-
-  const USER=`Search GOV.UK right now and find 18 real currently available UK government grants for businesses. Search multiple departments: Innovate UK, DEFRA, British Business Bank, DESNZ, DBT, UKRI. Return ONLY a valid JSON array — no markdown fences, no explanation, just raw JSON starting with [ and ending with ].`;
+  // Animate progress while server does the work
+  let pct = 10;
+  const ticker = setInterval(() => {
+    pct = Math.min(pct + 3, 88);
+    const msgs = ['Searching Innovate UK…','Searching DEFRA…','Searching British Business Bank…',
+      'Searching UKRI…','Searching DESNZ…','Compiling results…'];
+    setProgress(pct, msgs[Math.floor((pct-10)/14)] || 'Processing…');
+  }, 2000);
 
   try{
-    doneStep('Connecting'); setProgress(15,'Searching GOV.UK…');
-    activateStep('Searching');
+    const token = localStorage.getItem('gs_token') || '';
+    const resp = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
+    });
 
-    let messages=[{role:'user',content:USER}];
-    let finalText='';
-    let searches=0;
+    clearInterval(ticker);
 
-    for(let loop=0;loop<4;loop++){
-      const data=await callAPI({
-        system:SYSTEM,
-        tools:[{type:'web_search_20250305',name:'web_search'}],
-        messages
-      },'search');
+    if(resp.status === 401){ window.location.href='login.html'; return; }
 
-      if(data.stop_reason==='end_turn'){
-        finalText=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-        break;
-      }
-
-      if(data.stop_reason==='tool_use'){
-        messages.push({role:'assistant',content:data.content});
-        const results=[];
-        for(const b of (data.content||[])){
-          if(b.type==='tool_use'&&b.name==='web_search'){
-            searches++;
-            doneStep('Searching');
-            setProgress(Math.min(15+searches*10,78),`Search ${searches}: "${(b.input?.query||'').slice(0,45)}…"`);
-            activateStep('Search '+searches);
-            results.push({type:'tool_result',tool_use_id:b.id,content:'Search done. Now compile all grants found into the JSON array.'});
-          }
-        }
-        if(results.length){
-          messages.push({role:'user',content:results});
-          doneStep('Search '+searches);
-        } else {
-          finalText=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-          break;
-        }
-      } else {
-        finalText=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-        break;
-      }
+    if(resp.status === 403){
+      const d = await resp.json();
+      showUpgradeModal(d.error || 'Upgrade to search for grants.');
+      setProgress(100,'Search limit reached');
+      allGrants=getFallback(); updateStats();
+      setAI('active','Search limit reached. Showing cached grants.');
+      setTimeout(()=>$('progressWrap').classList.remove('show'),4000);
+      return;
     }
 
-    setProgress(88,'Parsing results…');
-    activateStep('Parsing');
-    const grants=parseGrants(finalText);
-    doneStep('Parsing');
-
-    if(grants&&grants.length>0){
-      allGrants=grants;
-      setProgress(100,`✅ ${grants.length} grants loaded from GOV.UK`);
-      updateStats();
-      setAI('active',`✅ <strong>${grants.length} live grants</strong> found via ${searches} GOV.UK searches. Click any card for details.`);
-      addStep('Complete','done');
-      setTimeout(()=>$('progressWrap').classList.remove('show'),3000);
-    } else {
-      throw new Error('No valid grant data returned');
+    if(!resp.ok){
+      const d = await resp.json().catch(()=>({}));
+      throw new Error(d.error || `Server error ${resp.status}`);
     }
+
+    const data = await resp.json();
+    const grants = data.grants;
+    const searches = data.searches || 0;
+
+    if(!grants || !grants.length) throw new Error('No grants returned');
+
+    allGrants = grants;
+    setProgress(100, `✅ ${grants.length} grants loaded from GOV.UK`);
+    updateStats();
+    doneStep('Searching');
+    addStep('Complete','done');
+    setAI('active', `✅ <strong>${grants.length} live grants</strong> found via ${searches} GOV.UK searches. Click any card for details.`);
+    setTimeout(()=>$('progressWrap').classList.remove('show'),3000);
+
   }catch(err){
+    clearInterval(ticker);
     console.error('Search error:',err);
-    const is429=err.message.includes('429');
-    setProgress(100, is429 ? 'Rate limit — try again shortly' : 'Loaded cached dataset');
     allGrants=getFallback(); updateStats();
-    if(is429){
-      setAI('thinking',`⏳ <strong>Rate limit reached</strong> — the AI is busy. Please wait 30 seconds then click Refresh.`);
+    if(err.message.includes('429')||err.message.includes('rate')){
+      setProgress(100,'Rate limited — try again in 30 seconds');
+      setAI('thinking','⏳ <strong>Rate limit reached</strong> — wait 30 seconds then click Refresh.');
     } else {
-      setAI('active',`⚠️ Live search issue: ${err.message.slice(0,80)}. Showing cached grants.`);
+      setProgress(100,'Using cached grants');
+      setAI('active','Showing cached grants. Live search will retry automatically next time.');
     }
     setTimeout(()=>$('progressWrap').classList.remove('show'),5000);
   }
