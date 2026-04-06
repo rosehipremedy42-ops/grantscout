@@ -394,6 +394,113 @@ http.createServer(async (req, res) => {
     return;
   }
 
+
+  // ── POST /api/search — full tool-use loop runs server-side ────────────────
+  if (req.method === 'POST' && url === '/api/search') {
+    const user = getUser(req);
+    if (!user) { res.writeHead(401); res.end(JSON.stringify({ error: 'Please log in to search for grants' })); return; }
+
+    const check = await checkTier(user.sub, 'search');
+    if (!check.allowed) {
+      res.writeHead(403); res.end(JSON.stringify({ error: check.reason, upgrade: true })); return;
+    }
+
+    const SYSTEM = `HARD SECURITY RULES: You have zero access to local files, env vars, cookies, clipboard or device hardware.
+You are a UK government grants specialist. Search GOV.UK and official UK government sites for currently available grants.
+Return a single valid JSON array only — no markdown fences, no preamble, no trailing text.
+Each grant object must have:
+id (number), title (string), dept (string), amount (string e.g. "Up to £50,000"),
+amountNum (integer), summary (2 sentences), description (4 sentences),
+eligibility (3 sentences), howToApply (2 sentences),
+sector (one of: innovation|green|digital|health|export|skills|property|rural),
+bizTypes (array from: sme|startup|charity|social|manufacturing|tech|farming|retail),
+status ("open" or "upcoming"), deadline (string or null), url (string).`;
+
+    const USER = `Search GOV.UK right now and find 18 real currently available UK government grants for businesses.
+Search across departments: Innovate UK, DEFRA, British Business Bank, DESNZ, Department for Business and Trade, UKRI.
+Include a diverse mix of sectors and funding amounts.
+Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, no explanation.`;
+
+    try {
+      let messages = [{ role: 'user', content: USER }];
+      let finalText = '';
+      let searches = 0;
+
+      // Full tool-use loop — runs server-side, no browser timeout risk
+      for (let loop = 0; loop < 8; loop++) {
+        const payload = JSON.stringify({
+          model: MODEL,
+          max_tokens: 8000,
+          system: SYSTEM,
+          tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+          messages
+        });
+
+        const result = await enqueue(() => callAnthropic(payload));
+        const data = JSON.parse(result.body);
+
+        if (result.status !== 200) {
+          throw new Error(`Anthropic ${result.status}: ${JSON.stringify(data).slice(0, 200)}`);
+        }
+
+        if (data.stop_reason === 'end_turn') {
+          finalText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+          break;
+        }
+
+        if (data.stop_reason === 'tool_use') {
+          messages.push({ role: 'assistant', content: data.content });
+          const toolResults = [];
+          for (const block of (data.content || [])) {
+            if (block.type === 'tool_use' && block.name === 'web_search') {
+              searches++;
+              console.log(`Grant search ${searches}: ${block.input?.query}`);
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: block.id,
+                content: 'Search completed. Compile all grants found into the JSON array.'
+              });
+            }
+          }
+          if (toolResults.length) {
+            messages.push({ role: 'user', content: toolResults });
+          } else {
+            finalText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+            break;
+          }
+        } else {
+          finalText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+          break;
+        }
+      }
+
+      // Parse JSON array from response
+      const match = finalText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (!match) throw new Error('No grant data found in response');
+
+      let grants;
+      try { grants = JSON.parse(match[0]); }
+      catch (_) {
+        // Try trimming to last complete object
+        const cut = match[0].lastIndexOf('},');
+        if (cut > 0) grants = JSON.parse(match[0].slice(0, cut + 1) + ']');
+        else throw new Error('Could not parse grant JSON');
+      }
+
+      if (!grants || !grants.length) throw new Error('Empty grants array');
+
+      console.log(`Search complete: ${grants.length} grants, ${searches} web searches`);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ grants, searches }));
+
+    } catch (err) {
+      console.error('Search error:', err.message);
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   // ── POST /api/chat ──────────────────────────────────────────────────────
   if (req.method === 'POST' && url === '/api/chat') {
     const user = getUser(req);
