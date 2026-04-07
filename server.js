@@ -60,14 +60,43 @@ function jsonReq(hostname, path, method, body, extraHeaders) {
 
 function rawReq(hostname, path, method, rawBody, extraHeaders) {
   return new Promise((resolve, reject) => {
-    const opts = { hostname, path, method, headers: { ...extraHeaders, 'Content-Length': rawBody.length } };
+    const buf = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody);
+    const opts = { hostname, path, method, headers: { ...extraHeaders, 'Content-Length': buf.byteLength } };
     const req = https.request(opts, res => {
       let d = '';
       res.on('data', c => d += c);
       res.on('end', () => resolve({ status: res.statusCode, body: d }));
     });
     req.on('error', reject);
-    req.write(rawBody);
+    req.write(buf);
+    req.end();
+  });
+}
+
+// Dedicated Stripe helper — always uses form-encoded body
+function stripeReq(path, params) {
+  const body = Buffer.from(new URLSearchParams(params).toString());
+  return new Promise((resolve, reject) => {
+    const opts = {
+      hostname: 'api.stripe.com',
+      path,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${STRIPE_SECRET}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': body.byteLength,
+      }
+    };
+    const req = https.request(opts, res => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(d) }); }
+        catch(_) { resolve({ status: res.statusCode, body: d }); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
     req.end();
   });
 }
@@ -297,37 +326,55 @@ http.createServer(async (req, res) => {
   if (req.method === 'POST' && url === '/api/checkout') {
     const user = getUser(req);
     if (!user) { res.writeHead(401); res.end(JSON.stringify({ error: 'Login required' })); return; }
-    const dbUser = await sbQuery('grantscout_users', `id=eq.${user.sub}`);
 
-    // Create or reuse Stripe customer
-    let customerId = dbUser.stripe_customer_id;
-    if (!customerId) {
-      const cust = await jsonReq('api.stripe.com', '/v1/customers', 'POST',
-        `email=${encodeURIComponent(dbUser.email)}&metadata[user_id]=${user.sub}`,
-        { 'Authorization': `Bearer ${STRIPE_SECRET}`, 'Content-Type': 'application/x-www-form-urlencoded' });
-      customerId = cust.body.id;
-      await sbUpdate('grantscout_users', `id=eq.${user.sub}`, { stripe_customer_id: customerId });
+    try {
+      const dbUser = await sbQuery('grantscout_users', `id=eq.${user.sub}`);
+      if (!dbUser) { res.writeHead(404); res.end(JSON.stringify({ error: 'User not found' })); return; }
+
+      // Create or reuse Stripe customer
+      let customerId = dbUser.stripe_customer_id;
+      if (!customerId) {
+        const cust = await stripeReq('/v1/customers', {
+          email: dbUser.email,
+          'metadata[user_id]': user.sub
+        });
+        if (!cust.body.id) {
+          console.error('Stripe customer create failed:', JSON.stringify(cust.body));
+          res.writeHead(500); res.end(JSON.stringify({ error: 'Could not create Stripe customer: ' + (cust.body.error?.message || 'unknown') })); return;
+        }
+        customerId = cust.body.id;
+        await sbUpdate('grantscout_users', `id=eq.${user.sub}`, { stripe_customer_id: customerId });
+        console.log('Created Stripe customer:', customerId);
+      }
+
+      // Create Stripe Checkout session
+      const session = await stripeReq('/v1/checkout/sessions', {
+        'customer': customerId,
+        'mode': 'subscription',
+        'line_items[0][price]': STRIPE_PRICE_ID,
+        'line_items[0][quantity]': '1',
+        'success_url': `${APP_URL}/index.html?upgraded=1`,
+        'cancel_url': `${APP_URL}/index.html`,
+        'metadata[user_id]': user.sub,
+        'payment_method_types[0]': 'card',
+      });
+
+      console.log('Stripe session status:', session.status, 'url:', session.body.url ? 'ok' : 'missing');
+
+      if (!session.body.url) {
+        console.error('Stripe session error:', JSON.stringify(session.body));
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: session.body.error?.message || 'Stripe did not return a checkout URL' }));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ url: session.body.url }));
+
+    } catch(err) {
+      console.error('Checkout error:', err.message);
+      res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
     }
-
-    // Create checkout session
-    const params = new URLSearchParams({
-      'customer': customerId,
-      'mode': 'subscription',
-      'line_items[0][price]': STRIPE_PRICE_ID,
-      'line_items[0][quantity]': '1',
-      'success_url': `${APP_URL}/index.html?upgraded=1`,
-      'cancel_url': `${APP_URL}/index.html`,
-      'metadata[user_id]': user.sub,
-      'payment_method_types[0]': 'card',
-      'payment_method_types[1]': 'link',
-    }).toString();
-
-    const session = await rawReq('api.stripe.com', '/v1/checkout/sessions', 'POST',
-      Buffer.from(params), { 'Authorization': `Bearer ${STRIPE_SECRET}`,
-        'Content-Type': 'application/x-www-form-urlencoded' });
-    const sessionData = JSON.parse(session.body);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ url: sessionData.url }));
     return;
   }
 
@@ -335,20 +382,32 @@ http.createServer(async (req, res) => {
   if (req.method === 'POST' && url === '/api/portal') {
     const user = getUser(req);
     if (!user) { res.writeHead(401); res.end(JSON.stringify({ error: 'Login required' })); return; }
-    const dbUser = await sbQuery('grantscout_users', `id=eq.${user.sub}`);
-    if (!dbUser.stripe_customer_id) {
-      res.writeHead(400); res.end(JSON.stringify({ error: 'No subscription found' })); return;
+
+    try {
+      const dbUser = await sbQuery('grantscout_users', `id=eq.${user.sub}`);
+      if (!dbUser.stripe_customer_id) {
+        res.writeHead(400); res.end(JSON.stringify({ error: 'No subscription found' })); return;
+      }
+
+      const portal = await stripeReq('/v1/billing_portal/sessions', {
+        'customer': dbUser.stripe_customer_id,
+        'return_url': `${APP_URL}/index.html`
+      });
+
+      if (!portal.body.url) {
+        console.error('Portal error:', JSON.stringify(portal.body));
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: portal.body.error?.message || 'Could not open billing portal' }));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ url: portal.body.url }));
+
+    } catch(err) {
+      console.error('Portal error:', err.message);
+      res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
     }
-    const params = new URLSearchParams({
-      'customer': dbUser.stripe_customer_id,
-      'return_url': `${APP_URL}/index.html`
-    }).toString();
-    const portal = await rawReq('api.stripe.com', '/v1/billing_portal/sessions', 'POST',
-      Buffer.from(params), { 'Authorization': `Bearer ${STRIPE_SECRET}`,
-        'Content-Type': 'application/x-www-form-urlencoded' });
-    const portalData = JSON.parse(portal.body);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ url: portalData.url }));
     return;
   }
 
