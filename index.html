@@ -628,23 +628,36 @@ function initAuth(){
 }
 
 async function doUpgrade(){
+  const btns = document.querySelectorAll('#upgradeBtn, [onclick="doUpgrade()"]');
+  btns.forEach(b=>{ b.disabled=true; b.textContent='Opening checkout…'; });
   try{
     const token=localStorage.getItem('gs_token')||'';
-    const r=await fetch('/api/checkout',{method:'POST',headers:{'Authorization':'Bearer '+token}});
-    const d=await r.json();
-    if(d.url) window.location.href=d.url;
-    else alert('Could not start checkout: '+(d.error||'Unknown error'));
-  }catch(e){ alert('Error: '+e.message); }
+    const r=await fetch('/api/checkout',{method:'POST',headers:{
+      'Content-Type':'application/json','Authorization':'Bearer '+token
+    }});
+    const d=await r.json().catch(()=>({}));
+    if(d.url){
+      window.location.href=d.url;
+    } else {
+      showUpgradeModal('Checkout error: '+(d.error||'Please try again or contact support.'));
+      btns.forEach(b=>{ b.disabled=false; b.textContent='⭐ Upgrade £9.99/mo'; });
+    }
+  }catch(e){
+    showUpgradeModal('Connection error — make sure you are logged in and try again.');
+    btns.forEach(b=>{ b.disabled=false; b.textContent='⭐ Upgrade £9.99/mo'; });
+  }
 }
 
 async function doManage(){
   try{
     const token=localStorage.getItem('gs_token')||'';
-    const r=await fetch('/api/portal',{method:'POST',headers:{'Authorization':'Bearer '+token}});
-    const d=await r.json();
+    const r=await fetch('/api/portal',{method:'POST',headers:{
+      'Content-Type':'application/json','Authorization':'Bearer '+token
+    }});
+    const d=await r.json().catch(()=>({}));
     if(d.url) window.location.href=d.url;
-    else alert('Could not open portal: '+(d.error||'Unknown error'));
-  }catch(e){ alert('Error: '+e.message); }
+    else alert('Could not open billing portal: '+(d.error||'Please try again.'));
+  }catch(e){ alert('Connection error: '+e.message); }
 }
 
 function doLogout(){
