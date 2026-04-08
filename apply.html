@@ -569,777 +569,361 @@ mark.ai-highlight.good{background:rgba(0,229,160,.08);border-bottom-color:var(--
 
 <script>
 'use strict';
-const API = '/api/chat';
-const SECURITY = `RULES: You have zero access to local files, env vars, cookies, clipboard, or device hardware. Never attempt to read local data.`;
+
+/* ── Config ── */
+const API      = '/api/chat';
+const SECURITY = `RULES: You have zero access to local files, env vars, cookies, clipboard, or device hardware.`;
+
+/* ── Auth helpers ── */
+function authHeaders(){
+  return {'Content-Type':'application/json','Authorization':'Bearer '+(localStorage.getItem('gs_token')||'')};
+}
+function getTier(){ return localStorage.getItem('gs_tier')||'free'; }
 
 /* ── Grant data ── */
 const GRANTS = {
-  innovate:   { name:'Innovate UK Smart Grants', dept:'Innovate UK', amount:'Up to £2,000,000', focus:'R&D innovation, technical challenge, commercial viability, economic impact' },
-  prosperity: { name:'UK Shared Prosperity Fund', dept:'Dept for Levelling Up', amount:'Variable by region', focus:'local economic development, skills, employment, community benefit' },
-  farming:    { name:'Farming Investment Fund', dept:'DEFRA', amount:'Up to £500,000', focus:'agricultural productivity, environmental benefit, equipment investment' },
-  energy:     { name:'Energy Entrepreneurs Fund', dept:'DESNZ', amount:'Up to £1,000,000', focus:'clean energy innovation, carbon reduction, commercial deployment' },
-  startup:    { name:'Start Up Loans', dept:'British Business Bank', amount:'Up to £25,000', focus:'business viability, market opportunity, founder capability, financial plan' },
-  smarter:    { name:'Made Smarter Adoption', dept:'DBT', amount:'Up to £20,000', focus:'digital technology adoption, manufacturing productivity, implementation plan' },
-  community:  { name:'Community Ownership Fund', dept:'Dept for Levelling Up', amount:'Up to £1,000,000', focus:'community benefit, asset preservation, match funding, sustainability' },
-  other:      { name:'Custom Grant', dept:'Various', amount:'Custom', focus:'innovation, impact, financial viability, team capability' }
+  innovate:   {name:'Innovate UK Smart Grants',dept:'Innovate UK',amount:'Up to £2,000,000',focus:'R&D innovation, technical challenge, commercial viability, economic impact'},
+  prosperity: {name:'UK Shared Prosperity Fund',dept:'Dept for Levelling Up',amount:'Variable by region',focus:'local economic development, skills, employment, community benefit'},
+  farming:    {name:'Farming Investment Fund',dept:'DEFRA',amount:'Up to £500,000',focus:'agricultural productivity, environmental benefit, equipment investment'},
+  energy:     {name:'Energy Entrepreneurs Fund',dept:'DESNZ',amount:'Up to £1,000,000',focus:'clean energy innovation, carbon reduction, commercial deployment'},
+  startup:    {name:'Start Up Loans',dept:'British Business Bank',amount:'Up to £25,000',focus:'business viability, market opportunity, founder capability, financial plan'},
+  smarter:    {name:'Made Smarter Adoption',dept:'DBT',amount:'Up to £20,000',focus:'digital technology adoption, manufacturing productivity, implementation plan'},
+  community:  {name:'Community Ownership Fund',dept:'Dept for Levelling Up',amount:'Up to £1,000,000',focus:'community benefit, asset preservation, match funding, sustainability'},
+  other:      {name:'Custom Grant',dept:'Various',amount:'Custom',focus:'innovation, impact, financial viability, team capability'}
 };
 
 /* ── State ── */
-let currentStep = 0;
-let chatHistory = [];
-let chatBusy = false;
-let scoreTimer = null;
-let selectedGrant = null;
+let currentStep  = 0;
+let chatHistory  = [];
+let chatBusy     = false;
+let scoreTimer   = null;
+let selectedGrant= null;
 
 /* ── Utils ── */
-const $ = id => document.getElementById(id);
-const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const ts = () => new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+const $   = id => document.getElementById(id);
+const esc = s  => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const ts  = () => new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 const val = id => ($(id) ? $(id).value.trim() : '');
 
 /* ── Grant selector ── */
-function onGrantChange() {
-  const key = $('grantSelect').value;
-  if (!key) { $('selectedGrantInfo').classList.remove('show'); selectedGrant=null; return; }
-  selectedGrant = GRANTS[key];
-  $('sgName').textContent = selectedGrant.name;
-  $('sgDept').textContent = selectedGrant.dept;
-  $('sgAmount').textContent = selectedGrant.amount;
+function onGrantChange(){
+  const key=$('grantSelect').value;
+  if(!key){$('selectedGrantInfo').classList.remove('show');selectedGrant=null;return;}
+  selectedGrant=GRANTS[key];
+  $('sgName').textContent=selectedGrant.name;
+  $('sgDept').textContent=selectedGrant.dept;
+  $('sgAmount').textContent=selectedGrant.amount;
   $('selectedGrantInfo').classList.add('show');
-  // Welcome message from assistant
-  chatHistory = [];
-  addBotMsg(`Great choice! I'll help you write a strong application for the <strong>${selectedGrant.name}</strong>.<br><br>This grant focuses on: <em>${selectedGrant.focus}</em>.<br><br>Start filling in your details and ask me anything — I'll review your answers, suggest improvements, and help you write like a grant professional. 💪`);
+  chatHistory=[];
+  addBotMsg(`Great choice! I'll help you write a strong application for the <strong>${selectedGrant.name}</strong>.<br><br>This grant focuses on: <em>${selectedGrant.focus}</em>.<br><br>Fill in your details and I'll review each section as you go. 💪`);
 }
 
 /* ── Step navigation ── */
-function goToStep(n) {
+function goToStep(n){
   $('step'+currentStep).style.display='none';
   currentStep=n;
   $('step'+n).style.display='block';
-  // Update sidebar steps
   document.querySelectorAll('.step-item').forEach((el,i)=>{
     el.classList.remove('active','done');
     if(i<n) el.classList.add('done');
     else if(i===n) el.classList.add('active');
   });
-  // Build review on step 4
   if(n===4) buildReview();
   window.scrollTo(0,0);
   scheduleScore();
-  // Tell assistant which step we're on
   const stepNames=['Your Business','The Project','Financials','Impact & Need','Review'];
   if(chatHistory.length>0){
-    addBotMsg(`You're now on step: <strong>${stepNames[n]}</strong>. Ask me anything about this section or click a quick action below.`);
+    addBotMsg(`Now on: <strong>${stepNames[n]}</strong>. Ask me anything about this section.`);
   }
 }
 
-/* ── Score calculation ── */
+/* ── Score ── */
 function scheduleScore(){ clearTimeout(scoreTimer); scoreTimer=setTimeout(calcScore,800); }
 
 function calcScore(){
-  const fields = [
-    val('orgName'), val('orgType'), val('sector'), val('bizDesc'),
-    val('projectTitle'), val('projectSummary'), val('innovation'),
-    val('costBreakdown'), val('matchFunding'), val('sustainability'),
-    val('outcomes'), val('needStatement'), val('widerBenefits'), val('team')
-  ];
-  const filled = fields.filter(f=>f.length>20).length;
-  const complete = Math.round((filled/fields.length)*100);
-
-  // Clarity: avg word count of text fields
-  const textFields = [val('bizDesc'),val('projectSummary'),val('innovation'),val('outcomes'),val('needStatement')];
-  const avgWords = textFields.reduce((s,f)=>s+(f.split(/\s+/).filter(Boolean).length),0)/textFields.length;
-  const clarity = Math.min(100, Math.round(avgWords/3));
-
-  // Detail: length score
-  const totalChars = textFields.reduce((s,f)=>s+f.length,0);
-  const detail = Math.min(100, Math.round(totalChars/30));
-
-  // Impact: outcomes field quality
-  const hasNumbers = /\d/.test(val('outcomes'));
-  const impact = Math.min(100, (val('outcomes').length>50?40:0)+(hasNumbers?40:0)+(val('widerBenefits').length>30?20:0));
-
-  const overall = Math.round((clarity+detail+impact+complete)/4);
-
-  // Update UI
-  $('scoreNum').textContent = overall;
-  const circumference = 220;
-  $('scoreFill').style.strokeDashoffset = circumference - (circumference * overall/100);
-  const colour = overall<40?'#ff6b6b':overall<70?'var(--warn)':'var(--accent)';
-  $('scoreFill').style.stroke = colour;
-
-  setBar('Clarity',clarity); setBar('Detail',detail);
-  setBar('Impact',impact); setBar('Complete',complete);
-
-  // Update char counts
-  updateCC('bizDesc',500); updateCC('projectSummary',800);
-  updateCC('innovation',600); updateCC('outcomes',600);
+  if(getTier()!=='premium') return; // score locked for free users
+  const fields=[val('orgName'),val('orgType'),val('sector'),val('bizDesc'),
+    val('projectTitle'),val('projectSummary'),val('innovation'),
+    val('costBreakdown'),val('matchFunding'),val('sustainability'),
+    val('outcomes'),val('needStatement'),val('widerBenefits'),val('team')];
+  const filled=fields.filter(f=>f.length>20).length;
+  const complete=Math.round((filled/fields.length)*100);
+  const textFields=[val('bizDesc'),val('projectSummary'),val('innovation'),val('outcomes'),val('needStatement')];
+  const avgWords=textFields.reduce((s,f)=>s+(f.split(/\s+/).filter(Boolean).length),0)/textFields.length;
+  const clarity=Math.min(100,Math.round(avgWords/3));
+  const totalChars=textFields.reduce((s,f)=>s+f.length,0);
+  const detail=Math.min(100,Math.round(totalChars/30));
+  const hasNumbers=/\d/.test(val('outcomes'));
+  const impact=Math.min(100,(val('outcomes').length>50?40:0)+(hasNumbers?40:0)+(val('widerBenefits').length>30?20:0));
+  const overall=Math.round((clarity+detail+impact+complete)/4);
+  $('scoreNum').textContent=overall;
+  const circ=220;
+  $('scoreFill').style.strokeDashoffset=circ-(circ*overall/100);
+  $('scoreFill').style.stroke=overall<40?'#ff6b6b':overall<70?'var(--warn)':'var(--accent)';
+  setBar('Clarity',clarity);setBar('Detail',detail);setBar('Impact',impact);setBar('Complete',complete);
+  updateCC('bizDesc',500);updateCC('projectSummary',800);updateCC('innovation',600);updateCC('outcomes',600);
 }
 
-function setBar(name,val){
-  $('bar'+name).style.width=val+'%';
-  $('val'+name).textContent=val;
+function setBar(name,v){
+  const b=$('bar'+name); const val=$('val'+name);
+  if(b) b.style.width=v+'%';
+  if(val) val.textContent=v;
 }
 function updateCC(id,max){
-  const el=$(id); const cc=$('cc'+id);
+  const el=$(id);const cc=$('cc'+id);
   if(!el||!cc)return;
   const len=el.value.length;
   cc.textContent=len+' / '+max+' recommended';
   cc.className='char-count '+(len>=max?'good':len>max*.5?'':'');
 }
 
-/* ── AI field improvement ── */
-async function improveField(fieldId, instruction) {
-  const textarea = $(fieldId);
-  const sugBox = $(fieldId+'Sug');
+/* ── AI Improve ── */
+async function improveField(fieldId, instruction){
+  const tier=getTier();
+  const isProject=fieldId==='projectSummary'||fieldId==='innovation'||fieldId==='projectTitle';
+  if(tier!=='premium'&&!isProject){
+    showUpgradeModal('AI Improve on this section is a Premium feature. Upgrade to unlock all sections.');
+    return;
+  }
+  const textarea=$(fieldId);
+  const sugBox=$(fieldId+'Sug');
   if(!textarea||!sugBox)return;
-  const currentText = textarea.value.trim();
-  const btn = textarea.parentElement.querySelector('.ai-suggest-btn');
-  if(btn){ btn.classList.add('loading'); btn.textContent='⏳ Thinking…'; }
-
-  const grantCtx = selectedGrant ? `The grant being applied for is: ${selectedGrant.name} (${selectedGrant.dept}). Focus areas: ${selectedGrant.focus}.` : '';
-
-  const prompt = `${instruction}\n\n${grantCtx}\n\nCurrent text:\n"${currentText||'(empty — write a strong example from scratch)'}"\n\nReturn ONLY the improved text, nothing else. No explanations, no preamble, no quotes around it.`;
-
-  try {
-    const resp = await fetch(API,{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ system: SECURITY+'\nYou are a UK government grant writing expert. You write compelling, specific, professional grant application text.', messages:[{role:'user',content:prompt}], max_tokens:600 })
+  const currentText=textarea.value.trim();
+  const btn=textarea.parentElement.querySelector('.ai-suggest-btn');
+  if(btn){btn.classList.add('loading');btn.textContent='⏳ Thinking…';}
+  const grantCtx=selectedGrant?`Grant: ${selectedGrant.name}. Focus: ${selectedGrant.focus}.`:'';
+  const prompt=`${instruction}\n\n${grantCtx}\n\nCurrent text:\n"${currentText||'(empty — write a strong example)'}"\n\nReturn ONLY the improved text. No explanations, no preamble.`;
+  try{
+    const resp=await fetch(API,{
+      method:'POST',
+      headers:authHeaders(),
+      body:JSON.stringify({
+        _action:'chat',
+        system:SECURITY+'\nYou are a UK government grant writing expert.',
+        messages:[{role:'user',content:prompt}],
+        max_tokens:600
+      })
     });
-    const data = await resp.json();
-    const improved = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
-
-    sugBox.innerHTML = `
+    if(resp.status===401){window.location.href='login.html';return;}
+    const data=await resp.json();
+    if(resp.status===403){
+      showUpgradeModal(data.error||'Upgrade to use this feature.');
+      if(btn){btn.classList.remove('loading');btn.textContent='✨ Improve';}
+      return;
+    }
+    const improved=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    sugBox.innerHTML=`
       <div class="suggestion-text">${esc(improved).replace(/\n/g,'<br>')}</div>
       <div class="suggestion-actions">
-        <button class="sug-btn accept" onclick="acceptSuggestion('${fieldId}', this)">✓ Use this</button>
+        <button class="sug-btn accept" onclick="acceptSuggestion('${fieldId}',this)">✓ Use this</button>
         <button class="sug-btn discard" onclick="discardSuggestion('${fieldId}')">✕ Discard</button>
       </div>`;
+    sugBox._improved=improved;
     sugBox.classList.add('show');
-    sugBox._improved = improved;
-  } catch(err) {
-    sugBox.innerHTML = `<div class="suggestion-text" style="color:var(--danger)">Error: ${esc(err.message)}. Is the server running?</div>`;
+  }catch(err){
+    sugBox.innerHTML=`<div class="suggestion-text" style="color:var(--danger)">Error: ${esc(err.message)}</div>`;
     sugBox.classList.add('show');
   }
-
-  if(btn){ btn.classList.remove('loading'); btn.textContent='✨ Improve'; }
+  if(btn){btn.classList.remove('loading');btn.textContent='✨ Improve';}
 }
 
-function acceptSuggestion(fieldId, btn) {
-  const sugBox = $(fieldId+'Sug');
-  const textarea = $(fieldId);
-  if(sugBox && textarea && sugBox._improved) {
-    textarea.value = sugBox._improved;
+function acceptSuggestion(fieldId){
+  const sugBox=$(fieldId+'Sug');
+  const textarea=$(fieldId);
+  if(sugBox&&textarea&&sugBox._improved){
+    textarea.value=sugBox._improved;
     scheduleScore();
   }
   discardSuggestion(fieldId);
 }
-function discardSuggestion(fieldId) {
-  const sugBox = $(fieldId+'Sug');
-  if(sugBox){ sugBox.classList.remove('show'); }
+function discardSuggestion(fieldId){
+  const sugBox=$(fieldId+'Sug');
+  if(sugBox) sugBox.classList.remove('show');
 }
 
 /* ── Build review ── */
 function buildReview(){
-  const sections = [
-    { title:'Organisation', fields:[
-      {label:'Name', val:val('orgName')}, {label:'Type', val:val('orgType')},
-      {label:'Sector', val:val('sector')}, {label:'Employees', val:val('employees')},
-      {label:'Turnover', val:val('turnover')}, {label:'Description', val:val('bizDesc')}
+  const sections=[
+    {title:'Organisation',fields:[
+      {label:'Name',val:val('orgName')},{label:'Type',val:val('orgType')},
+      {label:'Sector',val:val('sector')},{label:'Employees',val:val('employees')},
+      {label:'Turnover',val:val('turnover')},{label:'Description',val:val('bizDesc')}
     ]},
-    { title:'Project', fields:[
-      {label:'Title', val:val('projectTitle')}, {label:'Grant Requested', val:val('grantAmount')},
-      {label:'Total Cost', val:val('totalCost')}, {label:'Summary', val:val('projectSummary')},
-      {label:'Innovation', val:val('innovation')}
+    {title:'Project',fields:[
+      {label:'Title',val:val('projectTitle')},{label:'Grant Requested',val:val('grantAmount')},
+      {label:'Total Cost',val:val('totalCost')},{label:'Summary',val:val('projectSummary')},
+      {label:'Innovation',val:val('innovation')}
     ]},
-    { title:'Financials', fields:[
-      {label:'Cost Breakdown', val:val('costBreakdown')},
-      {label:'Match Funding', val:val('matchFunding')},
-      {label:'Sustainability', val:val('sustainability')}
+    {title:'Financials',fields:[
+      {label:'Cost Breakdown',val:val('costBreakdown')},
+      {label:'Match Funding',val:val('matchFunding')},
+      {label:'Sustainability',val:val('sustainability')}
     ]},
-    { title:'Impact & Need', fields:[
-      {label:'Outcomes', val:val('outcomes')},
-      {label:'Need Statement', val:val('needStatement')},
-      {label:'Wider Benefits', val:val('widerBenefits')},
-      {label:'Team', val:val('team')}
+    {title:'Impact & Need',fields:[
+      {label:'Outcomes',val:val('outcomes')},
+      {label:'Need Statement',val:val('needStatement')},
+      {label:'Wider Benefits',val:val('widerBenefits')},
+      {label:'Team',val:val('team')}
     ]}
   ];
-
-  $('reviewContent').innerHTML = sections.map(s=>`
+  $('reviewContent').innerHTML=sections.map(s=>`
     <div class="review-section">
       <div class="review-title">${esc(s.title)}</div>
       ${s.fields.map(f=>`
         <div style="margin-top:10px">
           <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:600">${esc(f.label)}</div>
-          ${f.val ? `<div class="review-value">${esc(f.val)}</div>` : `<div class="review-empty">Not filled in</div>`}
+          ${f.val?`<div class="review-value">${esc(f.val)}</div>`:`<div class="review-empty">Not filled in</div>`}
         </div>`).join('')}
     </div>`).join('');
 }
 
-/* ── Download ── */
+/* ── Download as .docx ── */
 async function downloadApplication(){
-  const btn = document.querySelector('.download-btn');
-  if(btn){ btn.textContent='⏳ Generating…'; btn.disabled=true; }
-
-  try {
-    const grantName = selectedGrant ? selectedGrant.name : 'Grant Application';
-    const orgName   = val('orgName') || 'Organisation';
-    const today     = new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
-
-    // Build the Word XML document (Office Open XML format)
-    // This is a real .docx — no library needed, just zipped XML
-    const xml = buildDocXML(grantName, orgName, today);
-
-    // A .docx is a ZIP file. We build a minimal ZIP in pure JS.
-    const zipBytes = buildZip(xml);
-    const blob = new Blob([zipBytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'Grant_Application_' + (val('orgName')||'GrantScout').replace(/\s+/g,'_') + '.docx';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-
-  } catch(err) {
-    console.error(err);
-    alert('Download failed: ' + err.message);
-  }
-
-  if(btn){ btn.textContent='⬇️ Download as Word Document (.docx)'; btn.disabled=false; }
+  const btn=document.querySelector('.download-btn');
+  if(btn){btn.textContent='⏳ Generating…';btn.disabled=true;}
+  try{
+    const grantName=selectedGrant?selectedGrant.name:'Grant Application';
+    const orgName=val('orgName')||'Organisation';
+    const today=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+    const xml=buildDocXML(grantName,orgName,today);
+    const zipBytes=buildZip(xml);
+    const blob=new Blob([zipBytes],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='Grant_Application_'+(val('orgName')||'GrantScout').replace(/\s+/g,'_')+'.docx';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  }catch(err){alert('Download failed: '+err.message);console.error(err);}
+  if(btn){btn.textContent='⬇️ Download as Word Document (.docx)';btn.disabled=false;}
 }
 
 function printApplication(){
-  const grantName = selectedGrant ? selectedGrant.name : 'Grant Application';
-  const orgName   = val('orgName') || 'Organisation';
-  const today     = new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
-
-  function pEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-  function block(label, value){
-    if(!value || !value.trim()) return `
-      <div class="field">
-        <div class="flabel">${pEsc(label)}</div>
-        <div class="fvalue empty">Not provided</div>
-      </div>`;
-    return `
-      <div class="field">
-        <div class="flabel">${pEsc(label)}</div>
-        <div class="fvalue">${pEsc(value).replace(/\n/g,'<br>')}</div>
-      </div>`;
+  const grantName=selectedGrant?selectedGrant.name:'Grant Application';
+  const orgName=val('orgName')||'Organisation';
+  const today=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'});
+  function pEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function block(label,value){
+    return !value||!value.trim()
+      ?`<div class="field"><div class="flabel">${pEsc(label)}</div><div class="fvalue empty">Not provided</div></div>`
+      :`<div class="field"><div class="flabel">${pEsc(label)}</div><div class="fvalue">${pEsc(value).replace(/\n/g,'<br>')}</div></div>`;
   }
-
-  function kv(label, value){
-    return `<div class="kv"><span class="kvk">${pEsc(label)}:</span> <span class="kvv">${pEsc(value||'—')}</span></div>`;
-  }
-
-  function section(num, title, content){
-    return `
-      <div class="section">
-        <div class="section-heading"><span class="section-num">${num}</span>${pEsc(title)}</div>
-        ${content}
-      </div>`;
-  }
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Grant Application — ${pEsc(grantName)}</title>
+  function kv(label,value){return `<div class="kv"><span class="kvk">${pEsc(label)}:</span> <span class="kvv">${pEsc(value||'—')}</span></div>`;}
+  function section(num,title,content){return `<div class="section"><div class="section-heading"><span class="section-num">${num}</span>${pEsc(title)}</div>${content}</div>`;}
+  const html=`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Grant Application — ${pEsc(grantName)}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap');
-  *{ box-sizing:border-box; margin:0; padding:0; }
-  body{ font-family:'DM Sans',Arial,sans-serif; font-size:11pt; color:#1a1a1a; background:#fff; padding:0; }
-
-  /* Cover */
-  .cover{ text-align:center; padding:60px 48px 48px; border-bottom:3px solid #00e5a0; margin-bottom:0; }
-  .cover-tag{ font-size:9pt; letter-spacing:3px; text-transform:uppercase; color:#00e5a0; font-weight:600; margin-bottom:12px; }
-  .cover-title{ font-family:'DM Serif Display',Georgia,serif; font-size:28pt; color:#0a0e1a; line-height:1.2; margin-bottom:10px; }
-  .cover-org{ font-size:14pt; color:#4f6dff; font-weight:600; margin-bottom:8px; }
-  .cover-date{ font-size:9pt; color:#999; }
-
-  /* Sections */
-  .section{ padding:32px 48px; border-bottom:1px solid #eee; page-break-inside:avoid; }
-  .section:last-child{ border-bottom:none; }
-  .section-heading{
-    font-family:'DM Serif Display',Georgia,serif;
-    font-size:15pt; color:#0a0e1a;
-    display:flex; align-items:center; gap:12px;
-    margin-bottom:20px; padding-bottom:10px;
-    border-bottom:2px solid #00e5a0;
-  }
-  .section-num{
-    width:28px; height:28px; border-radius:50%;
-    background:#00e5a0; color:#0a0e1a;
-    display:inline-flex; align-items:center; justify-content:center;
-    font-size:11pt; font-weight:700; flex-shrink:0;
-    font-family:'DM Mono',monospace;
-  }
-
-  /* Key-value rows */
-  .kv{ display:flex; gap:8px; margin-bottom:7px; font-size:10.5pt; }
-  .kvk{ font-weight:600; color:#444; min-width:170px; flex-shrink:0; }
-  .kvv{ color:#1a1a1a; }
-
-  /* Field blocks */
-  .field{ margin-top:18px; }
-  .flabel{ font-size:9pt; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#4f6dff; margin-bottom:6px; }
-  .fvalue{ font-size:10.5pt; line-height:1.7; color:#1a1a1a; white-space:pre-wrap; background:#f9f9f9; border-left:3px solid #e0e0e0; padding:10px 14px; border-radius:0 4px 4px 0; }
-  .fvalue.empty{ color:#aaa; font-style:italic; background:none; border-left:none; padding:0; }
-
-  /* Footer */
-  .footer{ text-align:center; padding:24px 48px; font-size:8pt; color:#aaa; background:#f9f9f9; }
-
-  /* Print settings */
-  @media print{
-    @page{ margin:15mm 18mm; size:A4; }
-    .cover{ padding:30px 0 24px; }
-    .section{ padding:24px 0; }
-    .footer{ padding:16px 0; }
-    body{ font-size:10pt; }
-    .no-print{ display:none !important; }
-  }
-
-  /* Screen only */
-  @media screen{
-    body{ max-width:800px; margin:0 auto; box-shadow:0 0 40px rgba(0,0,0,.1); min-height:100vh; }
-    .print-bar{
-      position:sticky; top:0; z-index:99;
-      background:#0a0e1a; padding:12px 48px;
-      display:flex; justify-content:space-between; align-items:center;
-      gap:12px;
-    }
-    .print-bar span{ color:#e2e8f8; font-size:13px; }
-    .print-btn{
-      padding:9px 20px; border-radius:8px; border:none; cursor:pointer;
-      font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600;
-      transition:all .2s;
-    }
-    .print-btn.go{ background:#00e5a0; color:#0a0e1a; }
-    .print-btn.go:hover{ box-shadow:0 4px 16px rgba(0,229,160,.4); }
-    .print-btn.close{ background:transparent; color:#6b7a9e; border:1px solid #252d45; }
-    .print-btn.close:hover{ color:#e2e8f8; }
-  }
-</style>
-</head>
-<body>
-
-<div class="print-bar no-print">
-  <span>📄 Print preview — looks exactly like the Word document</span>
-  <div style="display:flex;gap:8px;">
-    <button class="print-btn go" onclick="window.print()">🖨️ Print / Save as PDF</button>
-    <button class="print-btn close" onclick="window.close()">✕ Close</button>
-  </div>
-</div>
-
-<div class="cover">
-  <div class="cover-tag">Grant Application</div>
-  <div class="cover-title">${pEsc(grantName)}</div>
-  <div class="cover-org">${pEsc(orgName)}</div>
-  <div class="cover-date">Generated by GrantScout UK &nbsp;·&nbsp; ${pEsc(today)}</div>
-</div>
-
-${section(1,'Your Organisation',
-  kv('Organisation Name', val('orgName')) +
-  kv('Companies House No', val('companyNum')) +
-  kv('Organisation Type', val('orgType')) +
-  kv('Sector / Industry', val('sector')) +
-  kv('Number of Employees', val('employees')) +
-  kv('Annual Turnover', val('turnover')) +
-  block('Business Description', val('bizDesc'))
-)}
-
-${section(2,'The Project',
-  kv('Project Title', val('projectTitle')) +
-  kv('Start Date', val('startDate')) +
-  kv('End Date', val('endDate')) +
-  kv('Total Project Cost', val('totalCost')) +
-  kv('Grant Amount Requested', val('grantAmount')) +
-  block('Project Summary', val('projectSummary')) +
-  block('Innovation & Uniqueness', val('innovation'))
-)}
-
-${section(3,'Financials',
-  block('Cost Breakdown', val('costBreakdown')) +
-  block('Match Funding', val('matchFunding')) +
-  block('Financial Sustainability', val('sustainability'))
-)}
-
-${section(4,'Impact & Need',
-  block('Expected Outcomes & Impact', val('outcomes')) +
-  block('Why Grant Funding Is Needed', val('needStatement')) +
-  block('Wider Benefits', val('widerBenefits')) +
-  block('Team & Capability', val('team'))
-)}
-
-<div class="footer">
-  Generated by GrantScout UK &nbsp;·&nbsp; ${pEsc(today)}
-</div>
-
-</body>
-</html>`;
-
-  const w = window.open('','_blank','width=900,height=800');
-  if(!w){ alert('Please allow popups for this site to use the print function.'); return; }
-  w.document.write(html);
-  w.document.close();
-}
-
-
-function xmlEsc(s){
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
-}
-
-function para(text, opts){
-  opts = opts || {};
-  const sz  = opts.size  || 22;
-  const bold = opts.bold  ? '<w:b/>' : '';
-  const col  = opts.color ? '<w:color w:val="'+opts.color+'"/>' : '';
-  const head = opts.heading ? '<w:pStyle w:val="Heading'+opts.heading+'"/>' : '';
-  const align = opts.center ? '<w:jc w:val="center"/>' : '';
-  const spBefore = opts.spBefore || 0;
-  const spAfter  = opts.spAfter  || 160;
-  // Handle multiline — split on newlines
-  const lines = String(text||'').split('\n');
-  return lines.map((line, i) => `
-    <w:p>
-      <w:pPr>${head}<w:spacing w:before="${i===0?spBefore:0}" w:after="${i===lines.length-1?spAfter:40}"/>${align}</w:pPr>
-      <w:r><w:rPr>${bold}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>${col}</w:rPr><w:t xml:space="preserve">${xmlEsc(line)}</w:t></w:r>
-    </w:p>`).join('');
-}
-
-function sectionHeading(text){
-  return `
-    <w:p>
-      <w:pPr>
-        <w:pStyle w:val="Heading1"/>
-        <w:spacing w:before="480" w:after="120"/>
-        <w:pBdr><w:bottom w:val="single" w:sz="8" w:space="4" w:color="00e5a0"/></w:pBdr>
-      </w:pPr>
-      <w:r><w:rPr><w:b/><w:color w:val="0a0e1a"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>
-        <w:t>${xmlEsc(text)}</w:t>
-      </w:r>
-    </w:p>`;
-}
-
-function fieldLabel(text){
-  return `
-    <w:p>
-      <w:pPr><w:spacing w:before="200" w:after="40"/></w:pPr>
-      <w:r><w:rPr><w:b/><w:color w:val="4f6dff"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>
-        <w:t>${xmlEsc(text)}</w:t>
-      </w:r>
-    </w:p>`;
-}
-
-function fieldValue(text){
-  if(!text || !text.trim()) return para('(Not provided)', {color:'999999', size:20});
-  return para(text, {size:22, spAfter:200});
-}
-
-function kvRow(k, v){
-  return `
-    <w:p>
-      <w:pPr><w:spacing w:before="60" w:after="60"/></w:pPr>
-      <w:r><w:rPr><w:b/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t xml:space="preserve">${xmlEsc(k)}: </w:t></w:r>
-      <w:r><w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${xmlEsc(v||'—')}</w:t></w:r>
-    </w:p>`;
-}
-
-function buildDocXML(grantName, orgName, today){
-  const body = `
-    ${para('GRANT APPLICATION', {bold:true, size:56, color:'00e5a0', center:true, spAfter:120})}
-    ${para(grantName, {bold:true, size:36, color:'141927', center:true, spAfter:80})}
-    ${para(orgName, {size:28, color:'6b7a9e', center:true, spAfter:80})}
-    ${para('Generated by GrantScout UK  ·  '+today, {size:18, color:'aaaaaa', center:true, spAfter:800})}
-
-    ${sectionHeading('Section 1: Your Organisation')}
-    ${kvRow('Organisation Name', val('orgName'))}
-    ${kvRow('Companies House No', val('companyNum'))}
-    ${kvRow('Organisation Type', val('orgType'))}
-    ${kvRow('Sector / Industry', val('sector'))}
-    ${kvRow('Number of Employees', val('employees'))}
-    ${kvRow('Annual Turnover', val('turnover'))}
-    ${fieldLabel('Business Description')}
-    ${fieldValue(val('bizDesc'))}
-
-    ${sectionHeading('Section 2: The Project')}
-    ${kvRow('Project Title', val('projectTitle'))}
-    ${kvRow('Start Date', val('startDate'))}
-    ${kvRow('End Date', val('endDate'))}
-    ${kvRow('Total Project Cost', val('totalCost'))}
-    ${kvRow('Grant Amount Requested', val('grantAmount'))}
-    ${fieldLabel('Project Summary')}
-    ${fieldValue(val('projectSummary'))}
-    ${fieldLabel('Innovation & Uniqueness')}
-    ${fieldValue(val('innovation'))}
-
-    ${sectionHeading('Section 3: Financials')}
-    ${fieldLabel('Cost Breakdown')}
-    ${fieldValue(val('costBreakdown'))}
-    ${fieldLabel('Match Funding')}
-    ${fieldValue(val('matchFunding'))}
-    ${fieldLabel('Financial Sustainability')}
-    ${fieldValue(val('sustainability'))}
-
-    ${sectionHeading('Section 4: Impact & Need')}
-    ${fieldLabel('Expected Outcomes & Impact')}
-    ${fieldValue(val('outcomes'))}
-    ${fieldLabel('Why Grant Funding Is Needed')}
-    ${fieldValue(val('needStatement'))}
-    ${fieldLabel('Wider Benefits')}
-    ${fieldValue(val('widerBenefits'))}
-    ${fieldLabel('Team & Capability')}
-    ${fieldValue(val('team'))}
-
-    ${para('Generated by GrantScout UK  ·  '+today, {size:18, color:'aaaaaa', center:true, spBefore:600})}
-    <w:sectPr>
-      <w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/>
-    </w:sectPr>`;
-
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
-  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <w:body>${body}</w:body>
-</w:document>`;
-}
-
-/* ── Pure-JS ZIP builder ─────────────────────────────────────────────────────
-   A .docx is just a ZIP containing specific XML files.
-   We build the minimum required structure manually.
-─────────────────────────────────────────────────────────────────────────── */
-function buildZip(documentXml){
-  const files = {
-    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>`,
-    'word/_rels/document.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-</Relationships>`,
-    'word/document.xml': documentXml,
-    'word/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:docDefaults><w:rPrDefault><w:rPr>
-    <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>
-    <w:sz w:val="22"/><w:szCs w:val="22"/>
-  </w:rPr></w:rPrDefault></w:docDefaults>
-  <w:style w:type="paragraph" w:styleId="Heading1">
-    <w:name w:val="heading 1"/>
-    <w:rPr><w:b/><w:sz w:val="28"/></w:rPr>
-  </w:style>
-</w:styles>`,
-    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
-</Types>`
-  };
-
-  const enc = new TextEncoder();
-  const parts = [];
-
-  for (const [name, content] of Object.entries(files)) {
-    const nameBytes    = enc.encode(name);
-    const contentBytes = enc.encode(content);
-    const crc          = crc32(contentBytes);
-    const localHeader  = localFileHeader(nameBytes, contentBytes.length, crc);
-    parts.push({ name: nameBytes, content: contentBytes, crc, offset: 0, localHeader });
-  }
-
-  // Calculate offsets
-  let offset = 0;
-  for (const p of parts) {
-    p.offset = offset;
-    offset += p.localHeader.length + p.content.length;
-  }
-
-  // Build central directory
-  const centralDirs = parts.map(p => centralDirEntry(p.name, p.content.length, p.crc, p.offset));
-  const cdSize   = centralDirs.reduce((s, c) => s + c.length, 0);
-  const cdOffset = offset;
-  const eocd     = endOfCentralDir(parts.length, cdSize, cdOffset);
-
-  // Concatenate everything
-  const totalSize = cdOffset + cdSize + eocd.length;
-  const result    = new Uint8Array(totalSize);
-  let pos = 0;
-
-  for (const p of parts) {
-    result.set(p.localHeader, pos); pos += p.localHeader.length;
-    result.set(p.content, pos);     pos += p.content.length;
-  }
-  for (const cd of centralDirs) { result.set(cd, pos); pos += cd.length; }
-  result.set(eocd, pos);
-
-  return result;
-}
-
-function u16le(n){ return new Uint8Array([n&0xff,(n>>8)&0xff]); }
-function u32le(n){ return new Uint8Array([n&0xff,(n>>8)&0xff,(n>>16)&0xff,(n>>24)&0xff]); }
-
-function concat(...arrays){
-  const total = arrays.reduce((s,a)=>s+a.length,0);
-  const out   = new Uint8Array(total);
-  let p=0; for(const a of arrays){ out.set(a,p); p+=a.length; }
-  return out;
-}
-
-function localFileHeader(nameBytes, size, crc){
-  return concat(
-    new Uint8Array([0x50,0x4b,0x03,0x04]), // signature
-    u16le(20),          // version needed
-    u16le(0),           // flags
-    u16le(0),           // compression (stored)
-    u16le(0),u16le(0),  // mod time/date
-    u32le(crc),
-    u32le(size),        // compressed size
-    u32le(size),        // uncompressed size
-    u16le(nameBytes.length),
-    u16le(0),           // extra field length
-    nameBytes
-  );
-}
-
-function centralDirEntry(nameBytes, size, crc, offset){
-  return concat(
-    new Uint8Array([0x50,0x4b,0x01,0x02]), // signature
-    u16le(20),u16le(20), // versions
-    u16le(0),u16le(0),   // flags, compression
-    u16le(0),u16le(0),   // mod time/date
-    u32le(crc),
-    u32le(size),u32le(size),
-    u16le(nameBytes.length),
-    u16le(0),u16le(0),   // extra, comment
-    u16le(0),u16le(0),   // disk start, internal attr
-    u32le(0),            // external attr
-    u32le(offset),
-    nameBytes
-  );
-}
-
-function endOfCentralDir(count, cdSize, cdOffset){
-  return concat(
-    new Uint8Array([0x50,0x4b,0x05,0x06]),
-    u16le(0),u16le(0),
-    u16le(count),u16le(count),
-    u32le(cdSize),
-    u32le(cdOffset),
-    u16le(0)
-  );
-}
-
-function crc32(data){
-  let crc = 0xFFFFFFFF;
-  if(!crc32.table){
-    crc32.table = new Uint32Array(256);
-    for(let i=0;i<256;i++){
-      let c=i;
-      for(let j=0;j<8;j++) c=c&1?(0xEDB88320^(c>>>1)):(c>>>1);
-      crc32.table[i]=c;
-    }
-  }
-  for(let i=0;i<data.length;i++) crc=crc32.table[(crc^data[i])&0xff]^(crc>>>8);
-  return (crc^0xFFFFFFFF)>>>0;
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@400;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',Arial,sans-serif;font-size:11pt;color:#1a1a1a;background:#fff;}
+.cover{text-align:center;padding:60px 48px 48px;border-bottom:3px solid #00e5a0;}
+.cover-tag{font-size:9pt;letter-spacing:3px;text-transform:uppercase;color:#00e5a0;font-weight:600;margin-bottom:12px;}
+.cover-title{font-family:'DM Serif Display',serif;font-size:28pt;color:#0a0e1a;margin-bottom:10px;}
+.cover-org{font-size:14pt;color:#4f6dff;font-weight:600;margin-bottom:8px;}
+.cover-date{font-size:9pt;color:#999;}
+.section{padding:32px 48px;border-bottom:1px solid #eee;}
+.section-heading{font-family:'DM Serif Display',serif;font-size:15pt;color:#0a0e1a;display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:10px;border-bottom:2px solid #00e5a0;}
+.section-num{width:28px;height:28px;border-radius:50%;background:#00e5a0;color:#0a0e1a;display:inline-flex;align-items:center;justify-content:center;font-size:11pt;font-weight:700;flex-shrink:0;}
+.kv{display:flex;gap:8px;margin-bottom:7px;font-size:10.5pt;}
+.kvk{font-weight:600;color:#444;min-width:170px;flex-shrink:0;}
+.field{margin-top:18px;}
+.flabel{font-size:9pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#4f6dff;margin-bottom:6px;}
+.fvalue{font-size:10.5pt;line-height:1.7;color:#1a1a1a;white-space:pre-wrap;background:#f9f9f9;border-left:3px solid #e0e0e0;padding:10px 14px;}
+.fvalue.empty{color:#aaa;font-style:italic;background:none;border-left:none;padding:0;}
+.footer{text-align:center;padding:24px;font-size:8pt;color:#aaa;background:#f9f9f9;}
+.print-bar{position:sticky;top:0;z-index:99;background:#0a0e1a;padding:12px 48px;display:flex;justify-content:space-between;align-items:center;}
+.print-bar span{color:#e2e8f8;font-size:13px;}
+.pb{padding:9px 20px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;}
+@media print{@page{margin:15mm 18mm;size:A4;}.print-bar{display:none!important;}}
+</style></head><body>
+<div class="print-bar"><span>📄 Print preview</span><div style="display:flex;gap:8px;">
+<button class="pb" style="background:#00e5a0;color:#0a0e1a;" onclick="window.print()">🖨️ Print / Save as PDF</button>
+<button class="pb" style="background:transparent;color:#6b7a9e;border:1px solid #252d45;" onclick="window.close()">✕ Close</button>
+</div></div>
+<div class="cover"><div class="cover-tag">Grant Application</div><div class="cover-title">${pEsc(grantName)}</div><div class="cover-org">${pEsc(orgName)}</div><div class="cover-date">Generated by GrantScout UK · ${pEsc(today)}</div></div>
+${section(1,'Your Organisation',kv('Organisation Name',val('orgName'))+kv('Companies House No',val('companyNum'))+kv('Organisation Type',val('orgType'))+kv('Sector',val('sector'))+kv('Employees',val('employees'))+kv('Annual Turnover',val('turnover'))+block('Business Description',val('bizDesc')))}
+${section(2,'The Project',kv('Project Title',val('projectTitle'))+kv('Start Date',val('startDate'))+kv('End Date',val('endDate'))+kv('Total Cost',val('totalCost'))+kv('Grant Requested',val('grantAmount'))+block('Project Summary',val('projectSummary'))+block('Innovation & Uniqueness',val('innovation')))}
+${section(3,'Financials',block('Cost Breakdown',val('costBreakdown'))+block('Match Funding',val('matchFunding'))+block('Financial Sustainability',val('sustainability')))}
+${section(4,'Impact & Need',block('Expected Outcomes',val('outcomes'))+block('Why Grant Funding Is Needed',val('needStatement'))+block('Wider Benefits',val('widerBenefits'))+block('Team & Capability',val('team')))}
+<div class="footer">Generated by GrantScout UK · ${pEsc(today)}</div>
+</body></html>`;
+  const w=window.open('','_blank','width=900,height=800');
+  if(!w){alert('Please allow popups for this site.');return;}
+  w.document.write(html);w.document.close();
 }
 
 /* ── Chatbot ── */
-function getAppContext() {
-  const grant = selectedGrant ? `Grant: ${selectedGrant.name} (${selectedGrant.dept}). Focus: ${selectedGrant.focus}.` : 'No grant selected yet.';
-  const stepNames = ['Your Business','The Project','Financials','Impact & Need','Review'];
-  const filled = {
-    'Business Description': val('bizDesc'),
-    'Project Summary': val('projectSummary'),
-    'Innovation': val('innovation'),
-    'Outcomes': val('outcomes'),
-    'Need Statement': val('needStatement'),
+function getAppContext(){
+  const grant=selectedGrant?`Grant: ${selectedGrant.name} (${selectedGrant.dept}). Focus: ${selectedGrant.focus}.`:'No grant selected.';
+  const stepNames=['Your Business','The Project','Financials','Impact & Need','Review'];
+  const filled={
+    'Business Description':val('bizDesc'),'Project Summary':val('projectSummary'),
+    'Innovation':val('innovation'),'Outcomes':val('outcomes'),'Need Statement':val('needStatement')
   };
-  const ctx = Object.entries(filled).filter(([,v])=>v.length>10).map(([k,v])=>`${k}: "${v.slice(0,200)}${v.length>200?'…':''}"`).join('\n\n');
-  return `${grant}\nCurrent section: ${stepNames[currentStep]}.\n\nApplication content so far:\n${ctx||'(not filled in yet)'}`;
+  const ctx=Object.entries(filled).filter(([,v])=>v.length>10).map(([k,v])=>`${k}: "${v.slice(0,200)}${v.length>200?'…':''}"`).join('\n\n');
+  return `${grant}\nCurrent section: ${stepNames[currentStep]}.\n\nApplication so far:\n${ctx||'(not filled in yet)'}`;
 }
 
 function addUserMsg(text){
-  const el=document.createElement('div'); el.className='msg user';
+  const el=document.createElement('div');el.className='msg user';
   el.innerHTML=`<div class="bubble">${esc(text)}</div><div class="msg-time">${ts()}</div>`;
-  $('chatMsgs').appendChild(el); $('chatMsgs').scrollTop=9999;
+  $('chatMsgs').appendChild(el);$('chatMsgs').scrollTop=9999;
 }
 function addBotMsg(html){
   document.getElementById('typing-ind')?.remove();
-  const el=document.createElement('div'); el.className='msg bot';
+  const el=document.createElement('div');el.className='msg bot';
   el.innerHTML=`<div class="bubble">${html}</div><div class="msg-time">${ts()}</div>`;
-  $('chatMsgs').appendChild(el); $('chatMsgs').scrollTop=9999;
+  $('chatMsgs').appendChild(el);$('chatMsgs').scrollTop=9999;
 }
 function showTyping(){
   document.getElementById('typing-ind')?.remove();
-  const el=document.createElement('div'); el.className='msg bot'; el.id='typing-ind';
+  const el=document.createElement('div');el.className='msg bot';el.id='typing-ind';
   el.innerHTML=`<div class="typing-ind"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>`;
-  $('chatMsgs').appendChild(el); $('chatMsgs').scrollTop=9999;
+  $('chatMsgs').appendChild(el);$('chatMsgs').scrollTop=9999;
 }
 function fmtChat(t){
-  return esc(t)
-    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g,'<em>$1</em>')
-    .replace(/\n\n/g,'<br><br>')
-    .replace(/\n/g,'<br>');
+  return esc(t).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
 }
-function qa(text){ $('chatInput').value=text; sendChat(); }
+function qa(text){$('chatInput').value=text;sendChat();}
 
 async function sendChat(){
-  const inp=$('chatInput'); const text=inp.value.trim();
+  const inp=$('chatInput');const text=inp.value.trim();
   if(!text||chatBusy)return;
-  inp.value=''; inp.style.height='auto';
+  inp.value='';inp.style.height='auto';
+  $('qchips').style.display='none';
   addUserMsg(text);
   chatHistory.push({role:'user',content:text});
-  chatBusy=true; $('chatSend').disabled=true; showTyping();
-
-  const SYS = SECURITY + `
-
-You are an expert UK government grant writing coach embedded in GrantScout UK.
-You help users write compelling, professional grant applications that score highly with assessors.
-You are like Grammarly but for grant applications — you review text, suggest improvements, identify weak points, and help users write stronger answers.
-
-Key principles you follow:
-- Be specific: vague answers fail. Push users to add numbers, evidence, and detail.
-- Additionality: grant assessors want to know the grant makes a REAL difference.
-- Impact: emphasise jobs created, revenue generated, carbon saved, communities helped.
-- Capability: help users demonstrate their team is credible and experienced.
-- Be encouraging but honest — tell users when something is weak.
-- Keep responses concise and actionable.
-
-Current application context:
-${getAppContext()}`;
-
+  chatBusy=true;$('chatSend').disabled=true;showTyping();
+  const tier=getTier();
+  const action=tier==='free'?'application':'chat';
+  const SYS=SECURITY+`\nYou are an expert UK government grant writing coach. Help users write compelling grant applications. Be concise and specific.\n${getAppContext()}`;
   try{
     const resp=await fetch(API,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({system:SYS,messages:chatHistory,max_tokens:700})
+      method:'POST',
+      headers:authHeaders(),
+      body:JSON.stringify({_action:action,system:SYS,messages:chatHistory,max_tokens:700})
     });
+    if(resp.status===401){window.location.href='login.html';return;}
     const data=await resp.json();
-    const reply=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
     document.getElementById('typing-ind')?.remove();
+    if(resp.status===403){
+      showUpgradeModal(data.error||'Upgrade to continue using the assistant.');
+      chatBusy=false;$('chatSend').disabled=false;return;
+    }
+    const reply=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
     addBotMsg(fmtChat(reply));
     chatHistory.push({role:'assistant',content:reply});
     if(chatHistory.length>20)chatHistory=chatHistory.slice(-20);
   }catch(err){
     document.getElementById('typing-ind')?.remove();
-    addBotMsg(`Error: ${esc(err.message)}. Is the server running?`);
+    addBotMsg('Error: '+esc(err.message)+'. Please try again.');
   }
-  chatBusy=false; $('chatSend').disabled=false;
+  chatBusy=false;$('chatSend').disabled=false;
 }
 
-
-/* ── Auth helpers ── */
-function authHeaders(){ return {'Content-Type':'application/json','Authorization':'Bearer '+(localStorage.getItem('gs_token')||'')}; }
-
+/* ── Upgrade modal ── */
 function showUpgradeModal(msg){
   let m=document.getElementById('upgradeModal');
   if(!m){
-    m=document.createElement('div');
-    m.id='upgradeModal';
+    m=document.createElement('div');m.id='upgradeModal';
     m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:24px;';
     m.innerHTML=`<div style="background:var(--panel);border:1px solid var(--border);border-radius:16px;max-width:400px;width:100%;padding:28px;text-align:center;">
       <div style="font-size:32px;margin-bottom:12px;">⭐</div>
@@ -1347,7 +931,7 @@ function showUpgradeModal(msg){
       <div id="upgradeModalMsg" style="font-size:14px;color:var(--muted);margin-bottom:20px;line-height:1.6;"></div>
       <div style="background:var(--ink);border:1px solid rgba(0,229,160,.2);border-radius:10px;padding:14px;margin-bottom:20px;">
         <div style="font-family:'DM Mono',monospace;font-size:24px;color:var(--accent);">£9.99<span style="font-size:14px;color:var(--muted)">/month</span></div>
-        <div style="font-size:12px;color:var(--text);margin-top:6px;line-height:1.7;">Unlimited applications · Full AI assistant<br>All improve sections · Score feature<br>Apple Pay · Google Pay · Card</div>
+        <div style="font-size:12px;color:var(--text);margin-top:6px;line-height:1.7;">Unlimited applications · Full AI assistant<br>All improve sections · Score feature</div>
       </div>
       <button onclick="doUpgrade()" style="width:100%;padding:13px;background:var(--accent);color:var(--navy);border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px;">Upgrade Now</button>
       <button onclick="document.getElementById('upgradeModal').remove()" style="width:100%;padding:10px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer;">Maybe Later</button>
@@ -1359,48 +943,57 @@ function showUpgradeModal(msg){
 }
 
 async function doUpgrade(){
-  const r=await fetch('/api/checkout',{method:'POST',headers:{'Authorization':'Bearer '+(localStorage.getItem('gs_token')||'')}});
-  const d=await r.json();
-  if(d.url) window.location.href=d.url;
+  try{
+    const r=await fetch('/api/checkout',{method:'POST',headers:authHeaders()});
+    const d=await r.json().catch(()=>({}));
+    if(d.url) window.location.href=d.url;
+    else showUpgradeModal('Checkout error: '+(d.error||'Please try again.'));
+  }catch(e){showUpgradeModal('Connection error. Please try again.');}
 }
 async function doManage(){
-  const r=await fetch('/api/portal',{method:'POST',headers:{'Authorization':'Bearer '+(localStorage.getItem('gs_token')||'')}});
-  const d=await r.json();
-  if(d.url) window.location.href=d.url;
+  try{
+    const r=await fetch('/api/portal',{method:'POST',headers:authHeaders()});
+    const d=await r.json().catch(()=>({}));
+    if(d.url) window.location.href=d.url;
+    else alert('Could not open billing portal: '+(d.error||'Please try again.'));
+  }catch(e){alert('Error: '+e.message);}
 }
 function doLogout(){
   localStorage.removeItem('gs_token');localStorage.removeItem('gs_email');localStorage.removeItem('gs_tier');
   window.location.href='login.html';
 }
 
+/* ── Auth init ── */
 function initAuth(){
-  if(!localStorage.getItem('gs_token')){ window.location.href='login.html'; return; }
-  const tier=localStorage.getItem('gs_tier')||'free';
-  const badge=document.getElementById('tierBadge'); badge.style.display='';
-  if(tier==='premium'){
-    badge.textContent='⭐ PREMIUM';
-    badge.style.cssText+='background:rgba(0,229,160,.1);color:var(--accent);border:1px solid rgba(0,229,160,.3);';
-  } else {
-    badge.textContent='FREE';
-    badge.style.cssText+='background:rgba(107,122,158,.1);color:var(--muted);border:1px solid var(--border);';
-    document.getElementById('upgradeBtn').style.display='';
-    // Lock score panel visually
-    const scoreCard=document.querySelector('.score-card');
-    if(scoreCard){
-      const lock=document.createElement('div');
-      lock.style.cssText='position:absolute;inset:0;background:rgba(10,14,26,.8);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;z-index:5;';
-      lock.innerHTML='<div style="font-size:24px">🔒</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0 12px">Score unlocked<br>with Premium</div><button onclick="doUpgrade()" style="font-size:11px;padding:5px 12px;border-radius:6px;border:none;background:var(--accent);color:var(--navy);font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:4px;">Upgrade</button>';
-      scoreCard.style.position='relative';
-      scoreCard.appendChild(lock);
-    }
-    // Disable improve buttons outside project section
-    document.querySelectorAll('.ai-suggest-btn').forEach(btn=>{
-      const section=btn.closest('#step1');
-      if(!section){
-        btn.disabled=true; btn.style.opacity='.4'; btn.title='Upgrade to Premium to use AI Improve on all sections';
-        btn.onclick=e=>{e.preventDefault();showUpgradeModal('The AI Improve feature is only available on the Project section for free users. Upgrade to Premium to unlock it on all sections.');};
+  if(!localStorage.getItem('gs_token')){window.location.href='login.html';return;}
+  const tier=getTier();
+  const badge=$('tierBadge');
+  if(badge){
+    badge.style.display='';
+    if(tier==='premium'){
+      badge.textContent='⭐ PREMIUM';
+      badge.style.cssText+='background:rgba(0,229,160,.1);color:var(--accent);border:1px solid rgba(0,229,160,.3);';
+    } else {
+      badge.textContent='FREE';
+      badge.style.cssText+='background:rgba(107,122,158,.1);color:var(--muted);border:1px solid var(--border);';
+      const ub=$('upgradeBtn');if(ub)ub.style.display='';
+      // Lock score panel
+      const scoreCard=document.querySelector('.score-card');
+      if(scoreCard){
+        const lock=document.createElement('div');
+        lock.style.cssText='position:absolute;inset:0;background:rgba(10,14,26,.85);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;z-index:5;';
+        lock.innerHTML='<div style="font-size:24px">🔒</div><div style="font-size:12px;color:var(--muted);text-align:center;padding:0 12px">Score unlocked<br>with Premium</div><button onclick="doUpgrade()" style="font-size:11px;padding:5px 12px;border-radius:6px;border:none;background:var(--accent);color:var(--navy);font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;margin-top:4px;">Upgrade</button>';
+        scoreCard.style.position='relative';
+        scoreCard.appendChild(lock);
       }
-    });
+      // Lock non-project improve buttons
+      document.querySelectorAll('.ai-suggest-btn').forEach(btn=>{
+        if(!btn.closest('#step1')){
+          btn.disabled=true;btn.style.opacity='.4';
+          btn.onclick=e=>{e.preventDefault();showUpgradeModal('AI Improve on this section requires Premium. Upgrade to unlock all sections.');};
+        }
+      });
+    }
   }
   if(location.search.includes('upgraded=1')){
     localStorage.setItem('gs_tier','premium');
@@ -1409,75 +1002,53 @@ function initAuth(){
   }
 }
 
-/* ── Override sendChat + improveField to include auth + action ── */
-const _origSendChat = sendChat;
-sendChat = async function(){
-  const inp=$('chatInput'); const text=inp.value.trim();
-  if(!text||chatBusy)return;
-  inp.value=''; inp.style.height='auto';
-  $('qchips').style.display='none';
-  addUserMsg(text);
-  chatHistory.push({role:'user',content:text});
-  chatBusy=true; $('chatSend').disabled=true; showTyping();
+/* ── DOCX builder ── */
+function xmlEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');}
+function para(text,opts){
+  opts=opts||{};const sz=opts.size||22;const bold=opts.bold?'<w:b/>':'';
+  const col=opts.color?`<w:color w:val="${opts.color}"/>`:'';
+  const head=opts.heading?`<w:pStyle w:val="Heading${opts.heading}"/>`:'';
+  const align=opts.center?'<w:jc w:val="center"/>':'';
+  const spB=opts.spBefore||0;const spA=opts.spAfter||160;
+  return String(text||'').split('\n').map((line,i,arr)=>`<w:p><w:pPr>${head}<w:spacing w:before="${i===0?spB:0}" w:after="${i===arr.length-1?spA:40}"/>${align}</w:pPr><w:r><w:rPr>${bold}<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>${col}</w:rPr><w:t xml:space="preserve">${xmlEsc(line)}</w:t></w:r></w:p>`).join('');
+}
+function sectionHeading(text){return `<w:p><w:pPr><w:pStyle w:val="Heading1"/><w:spacing w:before="480" w:after="120"/><w:pBdr><w:bottom w:val="single" w:sz="8" w:space="4" w:color="00e5a0"/></w:pBdr></w:pPr><w:r><w:rPr><w:b/><w:color w:val="0a0e1a"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t>${xmlEsc(text)}</w:t></w:r></w:p>`;}
+function fieldLabel(text){return `<w:p><w:pPr><w:spacing w:before="200" w:after="40"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="4f6dff"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${xmlEsc(text)}</w:t></w:r></w:p>`;}
+function fieldValue(text){return(!text||!text.trim())?para('(Not provided)',{color:'999999',size:20}):para(text,{size:22,spAfter:200});}
+function kvRow(k,v){return `<w:p><w:pPr><w:spacing w:before="60" w:after="60"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t xml:space="preserve">${xmlEsc(k)}: </w:t></w:r><w:r><w:rPr><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${xmlEsc(v||'—')}</w:t></w:r></w:p>`;}
+function buildDocXML(grantName,orgName,today){
+  const body=`${para('GRANT APPLICATION',{bold:true,size:56,color:'00e5a0',center:true,spAfter:120})}${para(grantName,{bold:true,size:36,color:'141927',center:true,spAfter:80})}${para(orgName,{size:28,color:'6b7a9e',center:true,spAfter:80})}${para('Generated by GrantScout UK · '+today,{size:18,color:'aaaaaa',center:true,spAfter:800})}
+${sectionHeading('Section 1: Your Organisation')}${kvRow('Organisation Name',val('orgName'))}${kvRow('Companies House No',val('companyNum'))}${kvRow('Organisation Type',val('orgType'))}${kvRow('Sector',val('sector'))}${kvRow('Employees',val('employees'))}${kvRow('Annual Turnover',val('turnover'))}${fieldLabel('Business Description')}${fieldValue(val('bizDesc'))}
+${sectionHeading('Section 2: The Project')}${kvRow('Project Title',val('projectTitle'))}${kvRow('Start Date',val('startDate'))}${kvRow('End Date',val('endDate'))}${kvRow('Total Cost',val('totalCost'))}${kvRow('Grant Requested',val('grantAmount'))}${fieldLabel('Project Summary')}${fieldValue(val('projectSummary'))}${fieldLabel('Innovation & Uniqueness')}${fieldValue(val('innovation'))}
+${sectionHeading('Section 3: Financials')}${fieldLabel('Cost Breakdown')}${fieldValue(val('costBreakdown'))}${fieldLabel('Match Funding')}${fieldValue(val('matchFunding'))}${fieldLabel('Financial Sustainability')}${fieldValue(val('sustainability'))}
+${sectionHeading('Section 4: Impact & Need')}${fieldLabel('Expected Outcomes')}${fieldValue(val('outcomes'))}${fieldLabel('Why Grant Funding Is Needed')}${fieldValue(val('needStatement'))}${fieldLabel('Wider Benefits')}${fieldValue(val('widerBenefits'))}${fieldLabel('Team & Capability')}${fieldValue(val('team'))}
+${para('Generated by GrantScout UK · '+today,{size:18,color:'aaaaaa',center:true,spBefore:600})}<w:sectPr><w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/></w:sectPr>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`;
+}
+function buildZip(documentXml){
+  const files={'_rels/.rels':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`,'word/_rels/document.xml.rels':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,'word/document.xml':documentXml,'word/styles.xml':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style></w:styles>`,'[Content_Types].xml':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`};
+  const enc=new TextEncoder();const parts=[];
+  for(const[name,content]of Object.entries(files)){const nb=enc.encode(name);const cb=enc.encode(content);const crc=crc32(cb);const lh=localFileHeader(nb,cb.length,crc);parts.push({name:nb,content:cb,crc,offset:0,localHeader:lh});}
+  let offset=0;for(const p of parts){p.offset=offset;offset+=p.localHeader.length+p.content.length;}
+  const cds=parts.map(p=>centralDirEntry(p.name,p.content.length,p.crc,p.offset));
+  const cdSize=cds.reduce((s,c)=>s+c.length,0);const cdOffset=offset;
+  const eocd=endOfCentralDir(parts.length,cdSize,cdOffset);
+  const total=cdOffset+cdSize+eocd.length;const result=new Uint8Array(total);let pos=0;
+  for(const p of parts){result.set(p.localHeader,pos);pos+=p.localHeader.length;result.set(p.content,pos);pos+=p.content.length;}
+  for(const cd of cds){result.set(cd,pos);pos+=cd.length;}result.set(eocd,pos);return result;
+}
+function u16le(n){return new Uint8Array([n&0xff,(n>>8)&0xff]);}
+function u32le(n){return new Uint8Array([n&0xff,(n>>8)&0xff,(n>>16)&0xff,(n>>24)&0xff]);}
+function concat(...arrays){const total=arrays.reduce((s,a)=>s+a.length,0);const out=new Uint8Array(total);let p=0;for(const a of arrays){out.set(a,p);p+=a.length;}return out;}
+function localFileHeader(nb,size,crc){return concat(new Uint8Array([0x50,0x4b,0x03,0x04]),u16le(20),u16le(0),u16le(0),u16le(0),u16le(0),u32le(crc),u32le(size),u32le(size),u16le(nb.length),u16le(0),nb);}
+function centralDirEntry(nb,size,crc,offset){return concat(new Uint8Array([0x50,0x4b,0x01,0x02]),u16le(20),u16le(20),u16le(0),u16le(0),u16le(0),u16le(0),u32le(crc),u32le(size),u32le(size),u16le(nb.length),u16le(0),u16le(0),u16le(0),u16le(0),u32le(0),u32le(offset),nb);}
+function endOfCentralDir(count,cdSize,cdOffset){return concat(new Uint8Array([0x50,0x4b,0x05,0x06]),u16le(0),u16le(0),u16le(count),u16le(count),u32le(cdSize),u32le(cdOffset),u16le(0));}
+function crc32(data){let crc=0xFFFFFFFF;if(!crc32.table){crc32.table=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=c&1?(0xEDB88320^(c>>>1)):(c>>>1);crc32.table[i]=c;}}for(let i=0;i<data.length;i++)crc=crc32.table[(crc^data[i])&0xff]^(crc>>>8);return(crc^0xFFFFFFFF)>>>0;}
 
-  const tier=localStorage.getItem('gs_tier')||'free';
-  const action = tier==='free' ? 'application' : 'chat';
-
-  const SYS=SECURITY+`\nYou are an expert UK government grant writing coach. Help users write compelling applications.\n${getAppContext()}`;
-  try{
-    const resp=await fetch(API,{method:'POST',headers:authHeaders(),
-      body:JSON.stringify({_action:action,system:SYS,messages:chatHistory,max_tokens:700})});
-    if(resp.status===401){window.location.href='login.html';return;}
-    const data=await resp.json();
-    if(resp.status===403){document.getElementById('typing-ind')?.remove();showUpgradeModal(data.error||'Upgrade required');chatBusy=false;$('chatSend').disabled=false;return;}
-    const reply=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
-    document.getElementById('typing-ind')?.remove();
-    addBotMsg(fmtChat(reply));
-    chatHistory.push({role:'assistant',content:reply});
-    if(chatHistory.length>20)chatHistory=chatHistory.slice(-20);
-  }catch(err){
-    document.getElementById('typing-ind')?.remove();
-    addBotMsg('Error: '+esc(err.message));
-  }
-  chatBusy=false; $('chatSend').disabled=false;
-};
-
-/* ── Override improveField to include auth ── */
-const _origImprove = improveField;
-improveField = async function(fieldId, instruction){
-  const tier=localStorage.getItem('gs_tier')||'free';
-  const isProjectSection = fieldId==='projectSummary'||fieldId==='innovation'||fieldId==='projectTitle';
-  if(tier!=='premium'&&!isProjectSection){
-    showUpgradeModal('The AI Improve feature is only available on the Project section for free users. Upgrade to Premium to unlock all sections.');
-    return;
-  }
-  const textarea=$(fieldId); const sugBox=$(fieldId+'Sug');
-  if(!textarea||!sugBox)return;
-  const currentText=textarea.value.trim();
-  const btn=textarea.parentElement.querySelector('.ai-suggest-btn');
-  if(btn){btn.classList.add('loading');btn.textContent='⏳ Thinking…';}
-  const grantCtx=selectedGrant?`Grant: ${selectedGrant.name}. Focus: ${selectedGrant.focus}.`:'';
-  const prompt=`${instruction}\n\n${grantCtx}\n\nCurrent text:\n"${currentText||'(empty)'}"\n\nReturn ONLY the improved text.`;
-  try{
-    const resp=await fetch(API,{method:'POST',headers:authHeaders(),
-      body:JSON.stringify({_action:'chat',system:SECURITY+'\nYou are a UK grant writing expert.',messages:[{role:'user',content:prompt}],max_tokens:600})});
-    if(resp.status===401){window.location.href='login.html';return;}
-    const data=await resp.json();
-    if(resp.status===403){showUpgradeModal(data.error||'Upgrade required');return;}
-    const improved=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
-    sugBox.innerHTML=`<div class="suggestion-text">${esc(improved).replace(/\n/g,'<br>')}</div><div class="suggestion-actions"><button class="sug-btn accept" onclick="acceptSuggestion('${fieldId}',this)">✓ Use this</button><button class="sug-btn discard" onclick="discardSuggestion('${fieldId}')">✕ Discard</button></div>`;
-    sugBox._improved=improved; sugBox.classList.add('show');
-  }catch(err){
-    sugBox.innerHTML=`<div class="suggestion-text" style="color:var(--danger)">Error: ${esc(err.message)}</div>`;
-    sugBox.classList.add('show');
-  }
-  if(btn){btn.classList.remove('loading');btn.textContent='✨ Improve';}
-};
-
+/* ── Init ── */
 initAuth();
-addBotMsg("👋 Welcome! Select your grant above to begin. I'll guide you through each section.");
+addBotMsg("👋 Welcome to the Grant Application Assistant! Select the grant you're applying for on the left, then I'll guide you through each section.");
 calcScore();
-
 </script>
 </body>
 </html>
