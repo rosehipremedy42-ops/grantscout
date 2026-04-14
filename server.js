@@ -599,15 +599,48 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
     return;
   }
 
-  // ── Serve static files ──────────────────────────────────────────────────
-  let filePath = url === '/' ? '/login.html' : url;
-  filePath = path.join(__dirname, filePath);
-  if (!filePath.startsWith(__dirname)) { res.writeHead(403); res.end('Forbidden'); return; }
 
-  fs.readFile(filePath, (err, data) => {
-    if (err) { res.writeHead(404); res.end('Not found'); return; }
-    const mime = MIME[path.extname(filePath)] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': mime });
+  // ── POST /api/email-signup ──────────────────────────────────────────────
+  if (req.method === 'POST' && url === '/api/email-signup') {
+    try {
+      const buf  = await readBody(req);
+      const { email } = JSON.parse(buf.toString());
+      if (!email || !email.includes('@')) {
+        res.writeHead(400); res.end(JSON.stringify({ error: 'Valid email required' })); return;
+      }
+      const existing = await sbQuery('email_signups', `email=eq.${encodeURIComponent(email)}`);
+      if (existing) {
+        res.writeHead(200, {'Content-Type':'application/json'});
+        res.end(JSON.stringify({ ok: true, message: 'Already signed up!' })); return;
+      }
+      await sbInsert('email_signups', { email });
+      res.writeHead(200, {'Content-Type':'application/json'});
+      res.end(JSON.stringify({ ok: true, message: 'You're on the list!' }));
+    } catch(err) {
+      console.error('Email signup error:', err.message);
+      res.writeHead(500); res.end(JSON.stringify({ error: 'Signup failed, please try again' }));
+    }
+    return;
+  }
+
+  // ── Serve static files ──────────────────────────────────────────────────
+  let fileName = url === '/' ? 'landing.html' : url.replace(/^\//, '').split('?')[0].split('#')[0];
+  if (fileName.includes('..')) { res.writeHead(403); res.end('Forbidden'); return; }
+  const fullPath = path.join(__dirname, fileName);
+  console.log('Static request: ' + url + ' -> ' + fullPath);
+
+  fs.readFile(fullPath, (err, data) => {
+    if (err) {
+      console.error('File not found: ' + fullPath);
+      fs.readdir(__dirname, (e2, files) => {
+        const list = e2 ? 'unknown' : (files||[]).filter(f=>/\.(html|js|json)$/.test(f)).join(', ');
+        res.writeHead(404, {'Content-Type':'text/html'});
+        res.end('<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px"><h2>404 - Not Found</h2><p>Requested: <code>' + fileName + '</code></p><p>Files available: <code>' + list + '</code></p><p><a href=\"/\">Home</a></p></body></html>');
+      });
+      return;
+    }
+    const mime = MIME[path.extname(fullPath)] || 'application/octet-stream';
+    res.writeHead(200, {'Content-Type': mime});
     res.end(data);
   });
 
