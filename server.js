@@ -17,10 +17,23 @@ const JWT_SECRET           = process.env.JWT_SECRET               || '';
 const MODEL                = 'claude-haiku-4-5-20251001';
 const APP_URL              = process.env.APP_URL                  || `http://localhost:${PORT}`;
 
-[ANTHROPIC_KEY, STRIPE_SECRET, STRIPE_PUBLISHABLE, STRIPE_WEBHOOK_SECRET,
- STRIPE_PRICE_ID, SUPABASE_URL, SUPABASE_KEY, JWT_SECRET].forEach((v, i) => {
-  if (!v) { console.error(`Missing env var #${i}`); process.exit(1); }
-});
+const REQUIRED_ENV = {
+  ANTHROPIC_API_KEY:       ANTHROPIC_KEY,
+  STRIPE_SECRET_KEY:       STRIPE_SECRET,
+  STRIPE_PUBLISHABLE_KEY:  STRIPE_PUBLISHABLE,
+  STRIPE_WEBHOOK_SECRET:   STRIPE_WEBHOOK_SECRET,
+  STRIPE_PRICE_ID:         STRIPE_PRICE_ID,
+  SUPABASE_URL:            SUPABASE_URL,
+  SUPABASE_SERVICE_KEY:    SUPABASE_KEY,
+  JWT_SECRET:              JWT_SECRET,
+};
+const missingVars = Object.entries(REQUIRED_ENV).filter(([,v]) => !v).map(([k]) => k);
+if (missingVars.length > 0) {
+  console.error('\n❌ Missing required environment variables:');
+  missingVars.forEach(k => console.error('   - ' + k));
+  console.error('\nSet these in Railway → Variables then redeploy.\n');
+  process.exit(1);
+}
 
 console.log('GrantScout UK starting on port ' + PORT);
 
