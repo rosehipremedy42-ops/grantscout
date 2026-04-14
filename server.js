@@ -615,7 +615,7 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
       }
       await sbInsert('email_signups', { email });
       res.writeHead(200, {'Content-Type':'application/json'});
-      res.end(JSON.stringify({ ok: true, message: 'You're on the list!' }));
+      res.end(JSON.stringify({ ok: true, message: "You're on the list!" }));
     } catch(err) {
       console.error('Email signup error:', err.message);
       res.writeHead(500); res.end(JSON.stringify({ error: 'Signup failed, please try again' }));
