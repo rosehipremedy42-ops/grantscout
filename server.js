@@ -14,6 +14,8 @@ const STRIPE_PRICE_ID      = process.env.STRIPE_PRICE_ID          || '';
 const SUPABASE_URL         = process.env.SUPABASE_URL             || '';
 const SUPABASE_KEY         = process.env.SUPABASE_SERVICE_KEY     || '';
 const JWT_SECRET           = process.env.JWT_SECRET               || '';
+const RESEND_API_KEY       = process.env.RESEND_API_KEY           || '';
+const FROM_EMAIL           = process.env.FROM_EMAIL               || 'onboarding@resend.dev';
 const MODEL                = 'claude-haiku-4-5-20251001';
 const APP_URL              = process.env.APP_URL                  || `http://localhost:${PORT}`;
 
@@ -34,6 +36,7 @@ if (missingVars.length > 0) {
   console.error('\nSet these in Railway → Variables then redeploy.\n');
   process.exit(1);
 }
+if (!RESEND_API_KEY) console.warn('⚠️  RESEND_API_KEY not set — grant alert emails will be disabled.');
 
 console.log('GrantScout UK starting on port ' + PORT);
 
@@ -280,6 +283,278 @@ async function checkTier(userId, action) {
   if (action === 'improve_all') return { allowed: false, reason: 'Free plan: only the Project section can be improved. Upgrade to unlock all sections.' };
 
   return { allowed: true, user };
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// GRANT ALERT EMAIL SYSTEM
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── Send email via Resend ─────────────────────────────────────────────────
+async function sendEmail(to, subject, html) {
+  if (!RESEND_API_KEY) { console.warn('Resend not configured, skipping email to', to); return false; }
+  const payload = JSON.stringify({ from: FROM_EMAIL, to, subject, html });
+  return new Promise((resolve) => {
+    const opts = {
+      hostname: 'api.resend.com',
+      path: '/emails',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload)
+      }
+    };
+    const req = https.request(opts, res => {
+      let d = ''; res.on('data', c => d += c);
+      res.on('end', () => {
+        const ok = res.statusCode >= 200 && res.statusCode < 300;
+        if (!ok) console.error(`Resend error ${res.statusCode}:`, d);
+        resolve(ok);
+      });
+    });
+    req.on('error', err => { console.error('Resend request error:', err.message); resolve(false); });
+    req.write(payload); req.end();
+  });
+}
+
+// ── Build HTML email for grant alerts ─────────────────────────────────────
+function buildAlertEmail(newGrants, totalGrants) {
+  const grantRows = newGrants.slice(0, 8).map(g => `
+    <tr>
+      <td style="padding:14px 0;border-bottom:1px solid #252d45;">
+        <a href="${g.url||'https://www.gov.uk'}" style="font-family:Georgia,serif;font-size:16px;color:#00e5a0;text-decoration:none;font-weight:600;">${g.title||'Untitled Grant'}</a>
+        <div style="font-size:12px;color:#6b7a9e;margin-top:3px;">${g.dept||''} · <span style="color:#00e5a0;font-family:monospace;">${g.amount||''}</span></div>
+        <div style="font-size:13px;color:#b0bcd4;margin-top:6px;line-height:1.5;">${(g.summary||'').slice(0,120)}${(g.summary||'').length>120?'…':''}</div>
+        <div style="margin-top:8px;">
+          <span style="display:inline-block;font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(0,229,160,.1);color:#00e5a0;border:1px solid rgba(0,229,160,.2);">${g.status||'open'}</span>
+          <span style="display:inline-block;font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(79,109,255,.1);color:#4f6dff;border:1px solid rgba(79,109,255,.2);margin-left:4px;">${g.sector||''}</span>
+        </div>
+      </td>
+    </tr>`).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>New UK Grants Available — GrantScout</title></head>
+<body style="margin:0;padding:0;background:#0a0e1a;font-family:'DM Sans',Arial,sans-serif;color:#e2e8f8;">
+  <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
+
+    <!-- Header -->
+    <div style="text-align:center;padding:32px 0 24px;">
+      <div style="display:inline-flex;align-items:center;gap:10px;text-decoration:none;">
+        <div style="width:36px;height:36px;background:#00e5a0;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:18px;">🏛️</div>
+        <span style="font-family:Georgia,serif;font-size:22px;color:#ffffff;">Grant<span style="color:#00e5a0;">Scout</span> UK</span>
+      </div>
+    </div>
+
+    <!-- Hero -->
+    <div style="background:#1a2035;border:1px solid #252d45;border-radius:16px;padding:28px;margin-bottom:20px;text-align:center;">
+      <div style="font-size:32px;margin-bottom:12px;">🔔</div>
+      <h1 style="font-family:Georgia,serif;font-size:26px;color:#ffffff;margin:0 0 10px;line-height:1.2;">
+        ${newGrants.length} New Grant${newGrants.length===1?'':'s'} Available
+      </h1>
+      <p style="font-size:15px;color:#6b7a9e;margin:0;line-height:1.6;">
+        We found ${newGrants.length} new UK government grant${newGrants.length===1?'':'s'} since your last alert.<br>
+        ${totalGrants} total grants are currently available on GOV.UK.
+      </p>
+    </div>
+
+    <!-- Grants list -->
+    <div style="background:#1a2035;border:1px solid #252d45;border-radius:16px;padding:24px;margin-bottom:20px;">
+      <h2 style="font-size:14px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#6b7a9e;margin:0 0 4px;">New This Week</h2>
+      <table style="width:100%;border-collapse:collapse;">${grantRows}</table>
+    </div>
+
+    <!-- CTA -->
+    <div style="text-align:center;margin-bottom:24px;">
+      <a href="${APP_URL}/index.html" style="display:inline-block;padding:14px 32px;background:#00e5a0;color:#0a0e1a;border-radius:10px;text-decoration:none;font-size:16px;font-weight:700;">
+        View All Grants →
+      </a>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center;padding-top:20px;border-top:1px solid #252d45;">
+      <p style="font-size:12px;color:#6b7a9e;margin:0 0 8px;">
+        You're receiving this because you signed up for grant alerts on GrantScout UK.
+      </p>
+      <p style="font-size:11px;color:#3d4a6b;margin:0;">
+        © 2026 GrantScout UK · Powered by Claude AI · Data from GOV.UK
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// ── Run the grant search (same logic as /api/search but no auth) ───────────
+async function runGrantSearch() {
+  const SYSTEM = `You are a UK government grants specialist. Search GOV.UK for currently available grants.
+Return a single valid JSON array only — no markdown, no preamble.
+Each grant: id, title, dept, amount (string), amountNum (integer), summary (2 sentences),
+description (4 sentences), eligibility (3 sentences), howToApply (2 sentences),
+sector (innovation|green|digital|health|export|skills|property|rural),
+bizTypes (array: sme|startup|charity|social|manufacturing|tech|farming|retail),
+status ("open"|"upcoming"), deadline (string|null), url (string).`;
+
+  const USER = `Search GOV.UK right now and find 18 real currently available UK government grants. Include Innovate UK, DEFRA, British Business Bank, DESNZ, UKRI. Return ONLY a valid JSON array.`;
+
+  let messages = [{ role: 'user', content: USER }];
+  let finalText = '';
+
+  for (let loop = 0; loop < 8; loop++) {
+    const payload = JSON.stringify({
+      model: MODEL, max_tokens: 8000, system: SYSTEM,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      messages
+    });
+    const result = await enqueue(() => callAnthropic(payload));
+    const data = JSON.parse(result.body);
+    if (result.status !== 200) throw new Error(`Anthropic ${result.status}`);
+    if (data.stop_reason === 'end_turn') {
+      finalText = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+      break;
+    }
+    if (data.stop_reason === 'tool_use') {
+      messages.push({ role: 'assistant', content: data.content });
+      const toolResults = [];
+      for (const block of (data.content||[])) {
+        if (block.type === 'tool_use' && block.name === 'web_search') {
+          toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Search done. Compile grants into JSON array.' });
+        }
+      }
+      if (toolResults.length) messages.push({ role: 'user', content: toolResults });
+      else { finalText = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(''); break; }
+    } else {
+      finalText = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+      break;
+    }
+  }
+
+  const match = finalText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+  if (!match) throw new Error('No JSON found in response');
+  try { return JSON.parse(match[0]); }
+  catch(_) {
+    const cut = match[0].lastIndexOf('},');
+    if (cut > 0) return JSON.parse(match[0].slice(0, cut+1) + ']');
+    throw new Error('Could not parse grant JSON');
+  }
+}
+
+// ── Detect new grants by comparing to cached list ─────────────────────────
+function findNewGrants(freshGrants, cachedGrants) {
+  if (!cachedGrants || !cachedGrants.length) return freshGrants;
+  const cachedTitles = new Set(cachedGrants.map(g => (g.title||'').toLowerCase().trim()));
+  return freshGrants.filter(g => !cachedTitles.has((g.title||'').toLowerCase().trim()));
+}
+
+// ── Save grants to cache in Supabase ─────────────────────────────────────
+async function saveGrantCache(grants) {
+  // Upsert — update if row exists, insert if not
+  const SB_HOST = SUPABASE_URL.replace('https://','');
+  const payload = JSON.stringify({ id: 1, grants, updated_at: new Date().toISOString() });
+  return new Promise((resolve, reject) => {
+    const buf = Buffer.from(payload);
+    const opts = {
+      hostname: SB_HOST,
+      path: '/rest/v1/grant_cache',
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Content-Length': buf.byteLength,
+        'Prefer': 'resolution=merge-duplicates'
+      }
+    };
+    const req = https.request(opts, res => {
+      let d = ''; res.on('data', c => d += c);
+      res.on('end', () => resolve({ status: res.statusCode }));
+    });
+    req.on('error', reject);
+    req.write(buf); req.end();
+  });
+}
+
+// ── Load cached grants from Supabase ─────────────────────────────────────
+async function loadGrantCache() {
+  const SB_HOST = SUPABASE_URL.replace('https://','');
+  const result = await jsonReq(SB_HOST, '/rest/v1/grant_cache?id=eq.1&limit=1', 'GET', null, {
+    'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Accept': 'application/json'
+  });
+  const rows = Array.isArray(result.body) ? result.body : [];
+  return rows[0]?.grants || [];
+}
+
+// ── Send alerts to all subscribers ────────────────────────────────────────
+async function sendGrantAlerts(newGrants, totalGrants) {
+  if (!RESEND_API_KEY) { console.log('Resend not configured, skipping alerts'); return; }
+  if (!newGrants.length) { console.log('No new grants found, skipping alerts'); return; }
+
+  // Get all email subscribers from Supabase
+  const SB_HOST = SUPABASE_URL.replace('https://','');
+  const result = await jsonReq(SB_HOST, '/rest/v1/email_signups?select=email&limit=1000', 'GET', null, {
+    'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Accept': 'application/json'
+  });
+  const subscribers = Array.isArray(result.body) ? result.body : [];
+  if (!subscribers.length) { console.log('No subscribers yet'); return; }
+
+  console.log(`Sending grant alerts to ${subscribers.length} subscribers...`);
+  const subject = `🔔 ${newGrants.length} New UK Grant${newGrants.length===1?'':'s'} Available — GrantScout`;
+  const html = buildAlertEmail(newGrants, totalGrants);
+
+  // Send in batches of 10 to avoid rate limits
+  let sent = 0;
+  for (let i = 0; i < subscribers.length; i += 10) {
+    const batch = subscribers.slice(i, i + 10);
+    await Promise.all(batch.map(async sub => {
+      const ok = await sendEmail(sub.email, subject, html);
+      if (ok) sent++;
+    }));
+    if (i + 10 < subscribers.length) await sleep(1000); // 1s between batches
+  }
+  console.log(`✅ Sent ${sent}/${subscribers.length} alert emails`);
+}
+
+// ── Daily grant check scheduler ────────────────────────────────────────────
+async function runDailyCheck() {
+  console.log('\n🔍 Running daily grant check...');
+  try {
+    const [freshGrants, cachedGrants] = await Promise.all([
+      runGrantSearch(),
+      loadGrantCache()
+    ]);
+    console.log(`Found ${freshGrants.length} grants. Cached: ${cachedGrants.length}`);
+
+    const newGrants = findNewGrants(freshGrants, cachedGrants);
+    console.log(`New grants since last check: ${newGrants.length}`);
+
+    // Save fresh grants to cache
+    await saveGrantCache(freshGrants);
+
+    // Send alerts if there are new grants
+    if (newGrants.length > 0) {
+      await sendGrantAlerts(newGrants, freshGrants.length);
+    }
+
+    console.log('✅ Daily grant check complete\n');
+  } catch(err) {
+    console.error('❌ Daily grant check failed:', err.message);
+  }
+}
+
+// Schedule daily check at 8am UTC every day
+function scheduleDailyCheck() {
+  const now = new Date();
+  const next8am = new Date(now);
+  next8am.setUTCHours(8, 0, 0, 0);
+  if (next8am <= now) next8am.setUTCDate(next8am.getUTCDate() + 1);
+  const msUntil8am = next8am - now;
+  console.log(`⏰ Next grant check scheduled in ${Math.round(msUntil8am/1000/60)} minutes (8am UTC)`);
+  setTimeout(() => {
+    runDailyCheck();
+    setInterval(runDailyCheck, 24 * 60 * 60 * 1000); // repeat every 24h
+  }, msUntil8am);
 }
 
 // ── HTTP Server ────────────────────────────────────────────────────────────
@@ -613,6 +888,17 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
   }
 
 
+
+  // ── GET /api/test-alerts (manual trigger for testing) ────────────────────
+  if (req.method === 'GET' && url === '/api/test-alerts') {
+    const user = getUser(req);
+    if (!user) { res.writeHead(401); res.end('Unauthorised'); return; }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ message: 'Daily check triggered — check Railway logs' }));
+    runDailyCheck(); // fire and forget
+    return;
+  }
+
   // ── POST /api/email-signup ──────────────────────────────────────────────
   if (req.method === 'POST' && url === '/api/email-signup') {
     try {
@@ -657,4 +943,7 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
     res.end(data);
   });
 
-}).listen(PORT, '0.0.0.0', () => console.log('Ready on port ' + PORT));
+}).listen(PORT, '0.0.0.0', () => {
+  console.log('Ready on port ' + PORT);
+  scheduleDailyCheck();
+});
