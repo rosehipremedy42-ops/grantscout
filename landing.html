@@ -49,7 +49,7 @@ h1 em{font-style:italic;color:var(--accent);}
 .sp-item{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);}
 .sp-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);}
 .demo-wrap{max-width:820px;margin:60px auto 0;padding:0 24px;}
-.demo-frame{background:var(--panel);border:1px solid var(--border);border-radius:16px;overflow:hidden;aspect-ratio:16/9;position:relative;}
+.demo-frame{background:#000;border:1px solid var(--border);border-radius:16px;overflow:hidden;aspect-ratio:16/9;position:relative;}
 .demo-screen{width:100%;height:100%;background:var(--ink);display:flex;align-items:center;justify-content:center;padding:20px;}
 .demo-ui{width:90%;max-width:640px;}
 .demo-bar{background:rgba(255,255,255,.06);border-radius:8px;padding:10px 16px;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
@@ -216,26 +216,19 @@ footer{border-top:1px solid var(--border);padding:40px 0;}
 </section>
 
 <div class="demo-wrap" id="demo">
-  <div class="demo-frame">
-    <div class="demo-screen">
-      <div class="demo-ui">
-        <div class="demo-bar">
-          <div class="demo-dot" style="background:#ff5f57"></div>
-          <div class="demo-dot" style="background:#ffbd2e;margin:0 4px"></div>
-          <div class="demo-dot" style="background:#28c840"></div>
-          <span style="font-size:11px;color:var(--muted);margin-left:8px;">grantscout.up.railway.app/index.html</span>
-        </div>
-        <div class="demo-cards">
-          <div class="demo-card"><div class="demo-card-title">Innovate UK Smart Grants</div><div class="demo-card-amt">Up to £2,000,000</div><div class="demo-card-tag">Innovation</div></div>
-          <div class="demo-card"><div class="demo-card-title">Energy Entrepreneurs Fund</div><div class="demo-card-amt">Up to £1,000,000</div><div class="demo-card-tag">Green</div></div>
-          <div class="demo-card"><div class="demo-card-title">Start Up Loans</div><div class="demo-card-amt">Up to £25,000</div><div class="demo-card-tag">Startup</div></div>
-          <div class="demo-card"><div class="demo-card-title">Made Smarter Adoption</div><div class="demo-card-amt">Up to £20,000</div><div class="demo-card-tag">Digital</div></div>
-        </div>
-      </div>
-      <div class="play-btn" onclick="alert('To add a real demo video: upload a screen recording to YouTube, then replace this with an embedded YouTube link. Ask me and I\'ll update the code for you!')">▶</div>
-    </div>
+  <div class="demo-frame" style="background:#000;padding:0;">
+    <iframe
+      width="100%"
+      height="100%"
+      src="https://www.youtube.com/embed/72BMMvT8MBU?rel=0&modestbranding=1&color=white"
+      title="GrantScout UK — Demo Video"
+      frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      allowfullscreen
+      style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:16px;">
+    </iframe>
   </div>
-  <p class="demo-label">Live preview of the GrantScout grant finder — <a href="login.html" style="color:var(--accent);text-decoration:none;">try it free →</a></p>
+  <p class="demo-label">See GrantScout in action — <a href="login.html" style="color:var(--accent);text-decoration:none;">try it free →</a></p>
 </div>
 
 <section class="stats-bar">
