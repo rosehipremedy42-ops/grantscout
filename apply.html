@@ -25,7 +25,7 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
 header{border-bottom:1px solid var(--border);padding:18px 0;background:rgba(10,14,26,.97);backdrop-filter:blur(14px);position:sticky;top:0;z-index:100;}
 .header-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;}
 .logo{display:flex;align-items:center;gap:12px;text-decoration:none;}
-.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),#00b87a);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .logo-text{font-family:'DM Serif Display',serif;font-size:20px;color:var(--white);}
 .logo-text span{color:var(--accent);}
 .nav{display:flex;align-items:center;gap:8px;}
@@ -191,6 +191,7 @@ mark.ai-highlight.good{background:rgba(0,229,160,.08);border-bottom-color:var(--
 
 /* Animations */
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 </style>
 </head>
 <body>
@@ -199,16 +200,16 @@ mark.ai-highlight.good{background:rgba(0,229,160,.08);border-bottom-color:var(--
   <div class="wrap">
     <div class="header-inner">
       <a class="logo" href="/">
-        <div class="logo-icon">🏛️</div>
+        <div class="logo-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="#0a0e1a"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.18L19 8.5v7L12 19.82 5 15.5v-7l7-4.32zM12 8a4 4 0 100 8 4 4 0 000-8zm0 2a2 2 0 110 4 2 2 0 010-4z"/></svg></div>
         <div class="logo-text">Grant<span>Scout</span> UK</div>
       </a>
       <nav class="nav">
-        <a class="nav-link" href="index.html">🔍 Find Grants</a>
-        <a class="nav-link active" href="apply.html">✍️ Apply</a>
+        <a class="nav-link" href="index.html">Find Grants</a>
+        <a class="nav-link active" href="apply.html">Apply</a>
       </nav>
       <div style="display:flex;align-items:center;gap:10px;">
         <div id="tierBadge" style="font-family:'DM Mono',monospace;font-size:10px;padding:3px 8px;border-radius:4px;letter-spacing:1px;display:none;"></div>
-        <button id="upgradeBtn" onclick="doUpgrade()" style="display:none;font-size:12px;padding:6px 14px;border-radius:7px;border:none;background:var(--accent);color:var(--navy);font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;">⭐ Upgrade £9.99/mo</button>
+        <button id="upgradeBtn" onclick="doUpgrade()" style="display:none;font-size:12px;padding:7px 16px;border-radius:7px;border:none;background:var(--accent);color:var(--navy);font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;letter-spacing:.1px;">Upgrade &mdash; £9.99/mo</button>
         <button onclick="doLogout()" style="font-size:12px;padding:6px 14px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;cursor:pointer;">Log Out</button>
       </div>
     </div>
@@ -300,7 +301,7 @@ mark.ai-highlight.good{background:rgba(0,229,160,.08);border-bottom-color:var(--
         </div>
       </div>
       <div class="tip-box">
-        <div class="tip-icon">💡</div>
+        <div class="tip-icon" style="font-size:14px;color:var(--accent);font-weight:700;">✦</div>
         <div class="tip-text">Click <strong>✨ Improve</strong> on any text field to get AI suggestions. The assistant on the right can also help you write stronger answers.</div>
       </div>
       <div class="form-grid">
@@ -378,7 +379,7 @@ mark.ai-highlight.good{background:rgba(0,229,160,.08);border-bottom-color:var(--
         </div>
       </div>
       <div class="tip-box">
-        <div class="tip-icon">🎯</div>
+        <div class="tip-icon" style="font-size:14px;color:var(--accent);font-weight:700;">✦</div>
         <div class="tip-text">Be <strong>specific</strong> — grant assessors want to know exactly what will be done, by when, and who will do it. Vague answers score poorly.</div>
       </div>
       <div class="form-grid full">
@@ -441,7 +442,7 @@ mark.ai-highlight.good{background:rgba(0,229,160,.08);border-bottom-color:var(--
         </div>
       </div>
       <div class="tip-box">
-        <div class="tip-icon">💰</div>
+        <div class="tip-icon" style="font-size:14px;color:var(--accent);font-weight:700;">✦</div>
         <div class="tip-text">Grant assessors want <strong>realistic, evidenced numbers</strong>. Break costs into clear categories and show how match funding (your own contribution) will be sourced.</div>
       </div>
       <div class="form-grid full">
@@ -486,7 +487,7 @@ mark.ai-highlight.good{background:rgba(0,229,160,.08);border-bottom-color:var(--
         </div>
       </div>
       <div class="tip-box">
-        <div class="tip-icon">🌍</div>
+        <div class="tip-icon" style="font-size:14px;color:var(--accent);font-weight:700;">✦</div>
         <div class="tip-text">UK government grants prioritise <strong>economic impact, job creation, and public benefit</strong>. Use specific numbers wherever possible — e.g. "create 12 full-time jobs" not "create jobs".</div>
       </div>
       <div class="form-grid full">
@@ -540,8 +541,8 @@ mark.ai-highlight.good{background:rgba(0,229,160,.08);border-bottom-color:var(--
         </div>
       </div>
       <div id="reviewContent"></div>
-      <button class="download-btn" onclick="downloadApplication()">⬇️ Download as Word Document (.docx)</button>
-      <button class="download-btn sec" onclick="printApplication()">🖨️ Print / Save as PDF</button>
+      <button class="download-btn" onclick="downloadApplication()">Download as Word Document (.docx)</button>
+      <button class="download-btn sec" onclick="printApplication()">Print / Save as PDF</button>
       <div class="step-nav">
         <button class="nav-btn prev" onclick="goToStep(3)">← Back &amp; Edit</button>
         <div class="step-indicator">Step 5 of 5</div>
@@ -554,10 +555,10 @@ mark.ai-highlight.good{background:rgba(0,229,160,.08);border-bottom-color:var(--
   <!-- ── Right: AI Writing Assistant ── -->
   <aside class="right-panel">
     <div class="assistant-header">
-      <div class="assistant-title">✍️ Writing Assistant</div>
+      <div class="assistant-title">Writing Assistant</div>
       <div class="assistant-sub">AI-powered · Grant specialist</div>
     </div>
-    <div class="sec-bar">🔒 Encrypted · No local data access</div>
+    <div class="sec-bar">Encrypted &middot; No local data access</div>
     <div class="chat-msgs" id="chatMsgs"></div>
     <div class="quick-actions" id="quickActions">
       <button class="qa" onclick="qa('Review my current section and give me specific tips to improve it')">Review section</button>
@@ -897,33 +898,75 @@ async function sendChat(){
   const inp=$('chatInput');const text=inp.value.trim();
   if(!text||chatBusy)return;
   inp.value='';inp.style.height='auto';
-  $('qchips').style.display='none';
+  const qa=$('quickActions');if(qa)qa.style.display='none';
   addUserMsg(text);
   chatHistory.push({role:'user',content:text});
   chatBusy=true;$('chatSend').disabled=true;showTyping();
   const tier=getTier();
   const action=tier==='free'?'application':'chat';
-  const SYS=SECURITY+`\nYou are an expert UK government grant writing coach. Help users write compelling grant applications. Be concise and specific.\n${getAppContext()}`;
+  const SYS=SECURITY+`\nYou are an expert UK government grant writing coach. Help users write compelling grant applications. Be concise, specific, and use markdown formatting (bold, bullet points) where helpful.\n${getAppContext()}`;
+  const token=localStorage.getItem('gs_token')||'';
   try{
-    const resp=await fetch(API,{
+    const resp=await fetch('/api/chat/stream',{
       method:'POST',
-      headers:authHeaders(),
-      body:JSON.stringify({_action:action,system:SYS,messages:chatHistory,max_tokens:700})
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify({_action:action,system:SYS,messages:chatHistory,max_tokens:900})
     });
     if(resp.status===401){window.location.href='login.html';return;}
-    const data=await resp.json();
-    document.getElementById('typing-ind')?.remove();
     if(resp.status===403){
-      showUpgradeModal(data.error||'Upgrade to continue using the assistant.');
+      const d=await resp.json().catch(()=>({}));
+      document.getElementById('typing-ind')?.remove();
+      showUpgradeModal(d.error||'Upgrade to continue using the assistant.');
       chatBusy=false;$('chatSend').disabled=false;return;
     }
-    const reply=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
-    addBotMsg(fmtChat(reply));
-    chatHistory.push({role:'assistant',content:reply});
+    // Remove typing indicator, create streaming bubble
+    document.getElementById('typing-ind')?.remove();
+    const msgEl=document.createElement('div');msgEl.className='msg bot';
+    const bubbleEl=document.createElement('div');bubbleEl.className='bubble';
+    const timeEl=document.createElement('div');timeEl.className='msg-time';timeEl.textContent=ts();
+    msgEl.appendChild(bubbleEl);msgEl.appendChild(timeEl);
+    $('chatMsgs').appendChild(msgEl);
+    // Streaming cursor
+    const cursor=document.createElement('span');
+    cursor.style.cssText='display:inline-block;width:2px;height:13px;background:var(--accent);margin-left:2px;vertical-align:middle;animation:blink .7s infinite;';
+    bubbleEl.appendChild(cursor);
+    let fullText='';
+    const reader=resp.body.getReader();
+    const decoder=new TextDecoder();
+    let buffer='';
+    while(true){
+      const {done,value}=await reader.read();
+      if(done)break;
+      buffer+=decoder.decode(value,{stream:true});
+      const lines=buffer.split('\n');
+      buffer=lines.pop();
+      for(const line of lines){
+        if(!line.startsWith('data: '))continue;
+        const data=line.slice(6).trim();
+        if(data==='[DONE]')break;
+        try{
+          const evt=JSON.parse(data);
+          if(evt.text){
+            fullText+=evt.text;
+            bubbleEl.innerHTML=fmtChat(fullText);
+            bubbleEl.appendChild(cursor);
+            $('chatMsgs').scrollTop=$('chatMsgs').scrollHeight;
+          }
+          if(evt.error){
+            bubbleEl.innerHTML=`<span style="color:#ff6b6b">Error: ${esc(evt.error)}</span>`;
+          }
+        }catch(_){}
+      }
+    }
+    cursor.remove();
+    bubbleEl.innerHTML=fmtChat(fullText);
+    chatHistory.push({role:'assistant',content:fullText});
     if(chatHistory.length>20)chatHistory=chatHistory.slice(-20);
+    $('chatMsgs').scrollTop=$('chatMsgs').scrollHeight;
   }catch(err){
     document.getElementById('typing-ind')?.remove();
-    addBotMsg('Error: '+esc(err.message)+'. Please try again.');
+    addBotMsg(`<span style="color:#ff6b6b">Something went wrong. Please try again.</span>`);
+    console.error('Chat error:',err);
   }
   chatBusy=false;$('chatSend').disabled=false;
 }

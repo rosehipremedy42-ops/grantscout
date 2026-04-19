@@ -46,6 +46,11 @@ const MIME = {
   '.css':'text/css',   '.json':'application/json', '.ico':'image/x-icon'
 };
 
+// ── In-memory grant cache for fast repeat searches ─────────────────────────
+let memGrantCache = null;
+let memGrantCacheTime = 0;
+const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -228,6 +233,51 @@ async function callAnthropic(payload, retries = 4) {
     console.log(`429 — waiting ${wait/1000}s (attempt ${attempt}/${retries})`);
     if (attempt < retries) await sleep(wait); else return result;
   }
+}
+
+// ── Streaming Anthropic call — pipes SSE to client response ───────────────
+function streamAnthropic(payload, res) {
+  return new Promise((resolve, reject) => {
+    const opts = {
+      hostname: 'api.anthropic.com', path: '/v1/messages', method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'web-search-2025-03-05'
+      }
+    };
+    const req = https.request(opts, upstream => {
+      let buffer = '';
+      upstream.on('data', chunk => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete line
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') { res.write('data: [DONE]\n\n'); continue; }
+            try {
+              const evt = JSON.parse(data);
+              // Forward text delta events
+              if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+                res.write(`data: ${JSON.stringify({ text: evt.delta.text })}\n\n`);
+              }
+              // Signal end of stream
+              if (evt.type === 'message_stop') {
+                res.write('data: [DONE]\n\n');
+              }
+            } catch(_) {}
+          }
+        }
+      });
+      upstream.on('end', () => resolve());
+      upstream.on('error', reject);
+    });
+    req.on('error', reject);
+    req.write(payload); req.end();
+  });
 }
 
 // ── Auth middleware ────────────────────────────────────────────────────────
@@ -450,7 +500,10 @@ function findNewGrants(freshGrants, cachedGrants) {
 
 // ── Save grants to cache in Supabase ─────────────────────────────────────
 async function saveGrantCache(grants) {
-  // Upsert — update if row exists, insert if not
+  // Also update in-memory cache
+  memGrantCache = grants;
+  memGrantCacheTime = Date.now();
+
   const SB_HOST = SUPABASE_URL.replace('https://','');
   const payload = JSON.stringify({ id: 1, grants, updated_at: new Date().toISOString() });
   return new Promise((resolve, reject) => {
@@ -478,12 +531,21 @@ async function saveGrantCache(grants) {
 
 // ── Load cached grants from Supabase ─────────────────────────────────────
 async function loadGrantCache() {
+  // Return in-memory cache if fresh
+  if (memGrantCache && (Date.now() - memGrantCacheTime) < CACHE_TTL_MS) {
+    return memGrantCache;
+  }
   const SB_HOST = SUPABASE_URL.replace('https://','');
   const result = await jsonReq(SB_HOST, '/rest/v1/grant_cache?id=eq.1&limit=1', 'GET', null, {
     'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Accept': 'application/json'
   });
   const rows = Array.isArray(result.body) ? result.body : [];
-  return rows[0]?.grants || [];
+  const grants = rows[0]?.grants || [];
+  if (grants.length) {
+    memGrantCache = grants;
+    memGrantCacheTime = Date.now();
+  }
+  return grants;
 }
 
 // ── Send alerts to all subscribers ────────────────────────────────────────
@@ -491,7 +553,6 @@ async function sendGrantAlerts(newGrants, totalGrants) {
   if (!RESEND_API_KEY) { console.log('Resend not configured, skipping alerts'); return; }
   if (!newGrants.length) { console.log('No new grants found, skipping alerts'); return; }
 
-  // Get all email subscribers from Supabase
   const SB_HOST = SUPABASE_URL.replace('https://','');
   const result = await jsonReq(SB_HOST, '/rest/v1/email_signups?select=email&limit=1000', 'GET', null, {
     'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Accept': 'application/json'
@@ -503,7 +564,6 @@ async function sendGrantAlerts(newGrants, totalGrants) {
   const subject = `🔔 ${newGrants.length} New UK Grant${newGrants.length===1?'':'s'} Available — GrantScout`;
   const html = buildAlertEmail(newGrants, totalGrants);
 
-  // Send in batches of 10 to avoid rate limits
   let sent = 0;
   for (let i = 0; i < subscribers.length; i += 10) {
     const batch = subscribers.slice(i, i + 10);
@@ -511,12 +571,12 @@ async function sendGrantAlerts(newGrants, totalGrants) {
       const ok = await sendEmail(sub.email, subject, html);
       if (ok) sent++;
     }));
-    if (i + 10 < subscribers.length) await sleep(1000); // 1s between batches
+    if (i + 10 < subscribers.length) await sleep(1000);
   }
   console.log(`✅ Sent ${sent}/${subscribers.length} alert emails`);
 }
 
-// ── Daily grant check scheduler ────────────────────────────────────────────
+// ── Daily grant check scheduler ─────────────────────────────────────────
 async function runDailyCheck() {
   console.log('\n🔍 Running daily grant check...');
   try {
@@ -529,10 +589,8 @@ async function runDailyCheck() {
     const newGrants = findNewGrants(freshGrants, cachedGrants);
     console.log(`New grants since last check: ${newGrants.length}`);
 
-    // Save fresh grants to cache
     await saveGrantCache(freshGrants);
 
-    // Send alerts if there are new grants
     if (newGrants.length > 0) {
       await sendGrantAlerts(newGrants, freshGrants.length);
     }
@@ -553,7 +611,7 @@ function scheduleDailyCheck() {
   console.log(`⏰ Next grant check scheduled in ${Math.round(msUntil8am/1000/60)} minutes (8am UTC)`);
   setTimeout(() => {
     runDailyCheck();
-    setInterval(runDailyCheck, 24 * 60 * 60 * 1000); // repeat every 24h
+    setInterval(runDailyCheck, 24 * 60 * 60 * 1000);
   }, msUntil8am);
 }
 
@@ -619,7 +677,6 @@ http.createServer(async (req, res) => {
       const dbUser = await sbQuery('grantscout_users', `id=eq.${user.sub}`);
       if (!dbUser) { res.writeHead(404); res.end(JSON.stringify({ error: 'User not found' })); return; }
 
-      // Create or reuse Stripe customer
       let customerId = dbUser.stripe_customer_id;
       if (!customerId) {
         const cust = await stripeReq('/v1/customers', {
@@ -635,7 +692,6 @@ http.createServer(async (req, res) => {
         console.log('Created Stripe customer:', customerId);
       }
 
-      // Create Stripe Checkout session
       const session = await stripeReq('/v1/checkout/sessions', {
         'customer': customerId,
         'mode': 'subscription',
@@ -704,7 +760,6 @@ http.createServer(async (req, res) => {
     const buf = await readBody(req);
     const sig = req.headers['stripe-signature'] || '';
 
-    // Verify Stripe signature
     try {
       const parts   = sig.split(',').reduce((o, p) => { const [k,v]=p.split('='); o[k]=v; return o; }, {});
       const ts      = parts.t;
@@ -741,11 +796,24 @@ http.createServer(async (req, res) => {
     return;
   }
 
-
-  // ── POST /api/search — full tool-use loop runs server-side ────────────────
+  // ── POST /api/search — with caching for speed ─────────────────────────────
   if (req.method === 'POST' && url === '/api/search') {
     const user = getUser(req);
     if (!user) { res.writeHead(401); res.end(JSON.stringify({ error: 'Please log in to search for grants' })); return; }
+
+    // Check cache first — return immediately if fresh
+    const cached = await loadGrantCache();
+    if (cached && cached.length > 0) {
+      console.log(`Cache hit: returning ${cached.length} grants instantly`);
+      // Still check tier (counts a search)
+      const check = await checkTier(user.sub, 'search');
+      if (!check.allowed) {
+        res.writeHead(403); res.end(JSON.stringify({ error: check.reason, upgrade: true })); return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ grants: cached, searches: 0, cached: true }));
+      return;
+    }
 
     const check = await checkTier(user.sub, 'search');
     if (!check.allowed) {
@@ -764,8 +832,7 @@ bizTypes (array from: sme|startup|charity|social|manufacturing|tech|farming|reta
 status ("open" or "upcoming"), deadline (string or null), url (string).`;
 
     const USER = `Search GOV.UK right now and find 18 real currently available UK government grants for businesses.
-Search across departments: Innovate UK, DEFRA, British Business Bank, DESNZ, Department for Business and Trade, UKRI.
-Include a diverse mix of sectors and funding amounts.
+Search across departments: Innovate UK, DEFRA, British Business Bank, DESNZ, UKRI, Dept for Business and Trade.
 Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, no explanation.`;
 
     try {
@@ -773,7 +840,6 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
       let finalText = '';
       let searches = 0;
 
-      // Full tool-use loop — runs server-side, no browser timeout risk
       for (let loop = 0; loop < 8; loop++) {
         const payload = JSON.stringify({
           model: MODEL,
@@ -821,20 +887,21 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
         }
       }
 
-      // Parse JSON array from response
       const match = finalText.match(/\[\s*\{[\s\S]*\}\s*\]/);
       if (!match) throw new Error('No grant data found in response');
 
       let grants;
       try { grants = JSON.parse(match[0]); }
       catch (_) {
-        // Try trimming to last complete object
         const cut = match[0].lastIndexOf('},');
         if (cut > 0) grants = JSON.parse(match[0].slice(0, cut + 1) + ']');
         else throw new Error('Could not parse grant JSON');
       }
 
       if (!grants || !grants.length) throw new Error('Empty grants array');
+
+      // Cache the fresh results
+      saveGrantCache(grants).catch(e => console.error('Cache save error:', e.message));
 
       console.log(`Search complete: ${grants.length} grants, ${searches} web searches`);
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -848,8 +915,8 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
     return;
   }
 
-  // ── POST /api/chat ──────────────────────────────────────────────────────
-  if (req.method === 'POST' && url === '/api/chat') {
+  // ── POST /api/chat/stream — SSE streaming chat ────────────────────────────
+  if (req.method === 'POST' && url === '/api/chat/stream') {
     const user = getUser(req);
     if (!user) { res.writeHead(401); res.end(JSON.stringify({ error: 'Please log in to use this feature' })); return; }
 
@@ -858,6 +925,44 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
     try { parsed = JSON.parse(buf.toString()); } catch(e) { res.writeHead(400); res.end('Bad JSON'); return; }
 
     // Tier check
+    const action = parsed._action || 'chat';
+    delete parsed._action;
+    const check = await checkTier(user.sub, action);
+    if (!check.allowed) {
+      res.writeHead(403); res.end(JSON.stringify({ error: check.reason, upgrade: true })); return;
+    }
+
+    parsed.model      = MODEL;
+    parsed.max_tokens = parsed.max_tokens || 1000;
+    parsed.stream     = true; // Enable streaming
+
+    // Set SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no'
+    });
+
+    const payload = JSON.stringify(parsed);
+    try {
+      await streamAnthropic(payload, res);
+    } catch(err) {
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+    }
+    res.end();
+    return;
+  }
+
+  // ── POST /api/chat — non-streaming fallback ──────────────────────────────
+  if (req.method === 'POST' && url === '/api/chat') {
+    const user = getUser(req);
+    if (!user) { res.writeHead(401); res.end(JSON.stringify({ error: 'Please log in to use this feature' })); return; }
+
+    const buf = await readBody(req);
+    let parsed;
+    try { parsed = JSON.parse(buf.toString()); } catch(e) { res.writeHead(400); res.end('Bad JSON'); return; }
+
     const action = parsed._action || 'chat';
     delete parsed._action;
     const check = await checkTier(user.sub, action);
@@ -887,15 +992,13 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
     return;
   }
 
-
-
   // ── GET /api/test-alerts (manual trigger for testing) ────────────────────
   if (req.method === 'GET' && url === '/api/test-alerts') {
     const user = getUser(req);
     if (!user) { res.writeHead(401); res.end('Unauthorised'); return; }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ message: 'Daily check triggered — check Railway logs' }));
-    runDailyCheck(); // fire and forget
+    runDailyCheck();
     return;
   }
 

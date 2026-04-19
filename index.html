@@ -14,135 +14,240 @@
 <meta name="twitter:title" content="Grant Finder — Search Live UK Government Grants | GrantScout">
 <meta name="twitter:description" content="Search live UK government grants from GOV.UK using AI. Filter by business type, sector and amount. Find Innovate UK, DEFRA, UKRI grants and more in seconds.">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
-:root{--navy:#0a0e1a;--ink:#141927;--panel:#1a2035;--border:#252d45;--accent:#00e5a0;--accent2:#4f6dff;--warn:#ffb830;--text:#e2e8f8;--muted:#6b7a9e;--white:#ffffff;}
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
+:root{
+  --navy:#080c18;
+  --ink:#111827;
+  --panel:#161e2e;
+  --panel2:#1c2540;
+  --border:#1f2d47;
+  --border2:#263452;
+  --accent:#00d68f;
+  --accent-dim:rgba(0,214,143,.12);
+  --accent2:#4f6dff;
+  --accent2-dim:rgba(79,109,255,.12);
+  --warn:#f59e0b;
+  --text:#dde6f5;
+  --text2:#b0bdd4;
+  --muted:#5a6a8a;
+  --white:#ffffff;
+  --radius:14px;
+  --radius-sm:8px;
+  --shadow:0 4px 24px rgba(0,0,0,.4);
+  --shadow-lg:0 12px 48px rgba(0,0,0,.5);
+}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--navy);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
-body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(79,109,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(79,109,255,.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
-.wrap{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:0 24px;}
-header{border-bottom:1px solid var(--border);padding:18px 0;background:rgba(10,14,26,.97);backdrop-filter:blur(14px);position:sticky;top:0;z-index:100;}
-.header-inner{display:flex;align-items:center;justify-content:space-between;}
-.logo{display:flex;align-items:center;gap:12px;}
-.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;}
-.logo-text{font-family:'DM Serif Display',serif;font-size:20px;color:var(--white);}
+html{scroll-behavior:smooth;}
+body{background:var(--navy);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;line-height:1.6;}
+body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(ellipse 80% 50% at 50% -20%,rgba(79,109,255,.07),transparent),linear-gradient(rgba(79,109,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(79,109,255,.025) 1px,transparent 1px);background-size:100% 100%,48px 48px,48px 48px;pointer-events:none;z-index:0;}
+.wrap{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 28px;}
+
+/* ── Header ── */
+header{border-bottom:1px solid var(--border);padding:0;background:rgba(8,12,24,.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);position:sticky;top:0;z-index:100;}
+.header-inner{display:flex;align-items:center;justify-content:space-between;height:64px;}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.logo-mark{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),#00b87a);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.logo-mark svg{width:18px;height:18px;fill:var(--navy);}
+.logo-text{font-family:'DM Serif Display',serif;font-size:19px;color:var(--white);letter-spacing:-.3px;}
 .logo-text span{color:var(--accent);}
-.badges{display:flex;gap:8px;}
-.badge{font-family:'DM Mono',monospace;font-size:10px;padding:3px 8px;border-radius:4px;letter-spacing:1px;}
-.badge.gov{background:rgba(79,109,255,.15);color:var(--accent2);border:1px solid rgba(79,109,255,.3);}
-.badge.sec{background:rgba(0,229,160,.1);color:var(--accent);border:1px solid rgba(0,229,160,.3);}
-.main{display:flex;gap:24px;padding:28px 0;min-height:calc(100vh - 77px);}
-.sidebar{width:280px;flex-shrink:0;display:flex;flex-direction:column;gap:16px;}
-.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;}
-.panel-title{font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:16px;}
-.search-btn{width:100%;padding:14px;background:var(--accent);color:var(--navy);border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;}
-.search-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 24px rgba(0,229,160,.3);}
-.search-btn:disabled{opacity:.6;cursor:not-allowed;}
-.filter-group{margin-bottom:16px;}
-.filter-label{font-size:12px;color:var(--muted);font-weight:500;margin-bottom:8px;display:block;}
-select{width:100%;background:var(--ink);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;padding:10px 12px;appearance:none;cursor:pointer;}
-select:focus{outline:none;border-color:var(--accent2);}
-.range-row{display:flex;justify-content:space-between;align-items:center;gap:8px;}
-.range-val{font-family:'DM Mono',monospace;font-size:12px;color:var(--accent);white-space:nowrap;min-width:70px;text-align:right;}
-input[type=range]{width:100%;height:4px;border-radius:2px;accent-color:var(--accent);border:none;background:var(--border);padding:0;cursor:pointer;}
-.chip-group{display:flex;flex-wrap:wrap;gap:6px;}
-.chip{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .15s;font-family:'DM Sans',sans-serif;}
-.chip:hover{border-color:var(--accent2);color:var(--accent2);}
-.chip.active{background:rgba(79,109,255,.15);border-color:var(--accent2);color:var(--accent2);}
-.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.stat-box{background:var(--ink);border:1px solid var(--border);border-radius:8px;padding:12px;}
-.stat-num{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:var(--accent);line-height:1;margin-bottom:4px;}
-.stat-label{font-size:11px;color:var(--muted);}
+.header-nav{display:flex;align-items:center;gap:4px;}
+.nav-link{font-size:13px;font-weight:500;color:var(--muted);text-decoration:none;padding:7px 14px;border-radius:var(--radius-sm);border:1px solid transparent;transition:all .18s;letter-spacing:.1px;}
+.nav-link:hover{color:var(--text);background:rgba(255,255,255,.04);}
+.nav-link.active{color:var(--accent);border-color:rgba(0,214,143,.25);background:rgba(0,214,143,.06);}
+.header-right{display:flex;align-items:center;gap:8px;}
+.tier-badge{font-family:'DM Mono',monospace;font-size:10px;padding:3px 9px;border-radius:5px;letter-spacing:1.2px;font-weight:500;display:none;}
+.tier-badge.premium{background:rgba(0,214,143,.1);color:var(--accent);border:1px solid rgba(0,214,143,.25);}
+.tier-badge.free{background:rgba(90,106,138,.1);color:var(--muted);border:1px solid var(--border);}
+.user-email{font-size:12px;color:var(--muted);display:none;}
+.btn-sm{font-size:12px;font-weight:600;padding:7px 16px;border-radius:var(--radius-sm);border:none;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .18s;letter-spacing:.1px;}
+.btn-upgrade{background:var(--accent);color:var(--navy);display:none;}
+.btn-upgrade:hover{background:#00c480;box-shadow:0 4px 16px rgba(0,214,143,.3);}
+.btn-manage{background:transparent;color:var(--muted);border:1px solid var(--border);display:none;}
+.btn-manage:hover{color:var(--text);border-color:var(--border2);}
+.btn-logout{background:transparent;color:var(--muted);border:1px solid var(--border);}
+.btn-logout:hover{color:var(--text);border-color:var(--border2);}
+
+/* ── Layout ── */
+.main{display:flex;gap:20px;padding:24px 0 40px;min-height:calc(100vh - 64px);}
+.sidebar{width:272px;flex-shrink:0;display:flex;flex-direction:column;gap:14px;}
 .content{flex:1;min-width:0;}
-.ai-status{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:12px;font-size:14px;}
+
+/* ── Panels ── */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;}
+.panel-title{font-size:10.5px;font-weight:600;letter-spacing:1.8px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;}
+
+/* ── Search button ── */
+.search-btn{width:100%;padding:13px 16px;background:var(--accent);color:var(--navy);border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;letter-spacing:.1px;}
+.search-btn:hover:not(:disabled){background:#00c480;box-shadow:0 6px 24px rgba(0,214,143,.35);transform:translateY(-1px);}
+.search-btn:disabled{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none;}
+.search-btn-icon{font-size:15px;line-height:1;}
+
+/* ── Filters ── */
+.filter-group{margin-bottom:14px;}
+.filter-group:last-child{margin-bottom:0;}
+.filter-label{font-size:11.5px;color:var(--muted);font-weight:500;margin-bottom:7px;display:block;letter-spacing:.2px;}
+select{width:100%;background:var(--ink);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13.5px;padding:9px 12px;appearance:none;cursor:pointer;transition:border-color .18s;}
+select:focus{outline:none;border-color:var(--accent2);}
+.range-row{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.range-val{font-family:'DM Mono',monospace;font-size:11.5px;color:var(--accent);white-space:nowrap;min-width:72px;text-align:right;}
+input[type=range]{width:100%;height:4px;border-radius:2px;accent-color:var(--accent);border:none;background:var(--border);padding:0;cursor:pointer;}
+.chip-group{display:flex;flex-wrap:wrap;gap:5px;}
+.chip{padding:5px 11px;border-radius:20px;font-size:11.5px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .15s;font-family:'DM Sans',sans-serif;letter-spacing:.1px;}
+.chip:hover{border-color:var(--accent2);color:var(--accent2);}
+.chip.active{background:var(--accent2-dim);border-color:rgba(79,109,255,.4);color:#7b96ff;}
+
+/* ── Stats ── */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.stat-box{background:var(--ink);border:1px solid var(--border);border-radius:9px;padding:12px 14px;}
+.stat-num{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:var(--accent);line-height:1;margin-bottom:3px;}
+.stat-label{font-size:10.5px;color:var(--muted);letter-spacing:.3px;}
+
+/* ── AI Status bar ── */
+.ai-status{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:13px 18px;margin-bottom:18px;display:flex;align-items:center;gap:12px;font-size:13.5px;}
 .ai-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s;}
-.ai-dot.active{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 1s infinite;}
-.ai-dot.thinking{background:var(--warn);box-shadow:0 0 8px var(--warn);animation:pulse .6s infinite;}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.ai-msg{flex:1;}
-.progress-wrap{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;display:none;}
+.ai-dot.active{background:var(--accent);box-shadow:0 0 8px rgba(0,214,143,.6);animation:pulse 1.5s infinite;}
+.ai-dot.thinking{background:var(--warn);box-shadow:0 0 8px rgba(245,158,11,.6);animation:pulse .8s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.ai-msg{flex:1;color:var(--text2);}
+.ai-msg strong{color:var(--text);}
+.ai-cached-badge{font-family:'DM Mono',monospace;font-size:10px;padding:2px 8px;border-radius:4px;background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,214,143,.2);white-space:nowrap;flex-shrink:0;}
+
+/* ── Progress ── */
+.progress-wrap{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px;display:none;}
 .progress-wrap.show{display:block;}
-.progress-label{font-size:13px;color:var(--text);margin-bottom:10px;}
-.progress-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
-.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:2px;transition:width .4s ease;width:0%;}
-.progress-steps{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
-.step{font-size:11px;font-family:'DM Mono',monospace;padding:3px 10px;border-radius:4px;border:1px solid var(--border);color:var(--muted);}
-.step.done{border-color:rgba(0,229,160,.3);color:var(--accent);background:rgba(0,229,160,.06);}
-.step.active{border-color:rgba(255,184,48,.4);color:var(--warn);animation:pulse .8s infinite;}
-.grants-list{display:flex;flex-direction:column;gap:14px;}
-.grant-card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;animation:slideIn .35s ease both;}
-@keyframes slideIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-.grant-card:hover{border-color:var(--accent2);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.3);}
-.grant-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent2);opacity:0;transition:opacity .2s;}
+.progress-label{font-size:13px;color:var(--text2);margin-bottom:10px;}
+.progress-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:2px;transition:width .5s ease;width:0%;}
+.progress-steps{display:flex;gap:7px;margin-top:12px;flex-wrap:wrap;}
+.step{font-size:10.5px;font-family:'DM Mono',monospace;padding:3px 10px;border-radius:4px;border:1px solid var(--border);color:var(--muted);}
+.step.done{border-color:rgba(0,214,143,.3);color:var(--accent);background:rgba(0,214,143,.05);}
+.step.active{border-color:rgba(245,158,11,.35);color:var(--warn);animation:pulse .9s infinite;}
+
+/* ── Grant cards ── */
+.grants-list{display:flex;flex-direction:column;gap:12px;}
+.grant-card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px;cursor:pointer;transition:all .22s;position:relative;overflow:hidden;animation:slideIn .3s ease both;}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.grant-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.35);background:var(--panel2);}
+.grant-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--accent2),var(--accent));opacity:0;transition:opacity .22s;border-radius:3px 0 0 3px;}
 .grant-card:hover::before{opacity:1;}
-.grant-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px;}
-.grant-title{font-family:'DM Serif Display',serif;font-size:17px;color:var(--white);line-height:1.3;}
-.grant-amount{font-family:'DM Mono',monospace;font-size:13px;color:var(--accent);background:rgba(0,229,160,.08);border:1px solid rgba(0,229,160,.2);padding:4px 10px;border-radius:6px;white-space:nowrap;flex-shrink:0;}
-.grant-desc{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px;}
-.grant-footer{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-.grant-tag{font-size:11px;padding:3px 10px;border-radius:4px;font-weight:500;background:rgba(79,109,255,.1);color:var(--accent2);border:1px solid rgba(79,109,255,.2);}
-.grant-tag.open{background:rgba(0,229,160,.08);color:var(--accent);border-color:rgba(0,229,160,.2);}
-.grant-tag.upcoming{background:rgba(255,184,48,.08);color:var(--warn);border-color:rgba(255,184,48,.2);}
+.grant-header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:9px;}
+.grant-title{font-family:'DM Serif Display',serif;font-size:16.5px;color:var(--white);line-height:1.35;letter-spacing:-.1px;}
+.grant-amount{font-family:'DM Mono',monospace;font-size:12.5px;color:var(--accent);background:var(--accent-dim);border:1px solid rgba(0,214,143,.2);padding:4px 10px;border-radius:6px;white-space:nowrap;flex-shrink:0;}
+.grant-desc{font-size:13px;color:var(--text2);line-height:1.65;margin-bottom:13px;}
+.grant-footer{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.grant-tag{font-size:11px;padding:3px 9px;border-radius:4px;font-weight:500;background:var(--accent2-dim);color:#7b96ff;border:1px solid rgba(79,109,255,.2);}
+.grant-tag.open{background:var(--accent-dim);color:var(--accent);border-color:rgba(0,214,143,.2);}
+.grant-tag.upcoming{background:rgba(245,158,11,.08);color:var(--warn);border-color:rgba(245,158,11,.2);}
 .grant-date{font-size:11px;color:var(--muted);margin-left:auto;font-family:'DM Mono',monospace;}
-.grant-dept{font-size:11px;color:var(--muted);padding:3px 10px;border-radius:4px;background:rgba(255,255,255,.04);border:1px solid var(--border);}
-.empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
-.empty-icon{font-size:48px;margin-bottom:16px;opacity:.4;}
-.empty-title{font-size:16px;color:var(--text);margin-bottom:8px;}
-.empty-sub{font-size:13px;}
-/* Modal */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center;padding:24px;}
+.grant-dept{font-size:11px;color:var(--muted);padding:3px 9px;border-radius:4px;background:rgba(255,255,255,.04);border:1px solid var(--border);}
+
+/* ── Empty state ── */
+.empty-state{text-align:center;padding:64px 24px;color:var(--muted);}
+.empty-icon{width:56px;height:56px;border-radius:14px;background:var(--panel2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px;}
+.empty-title{font-size:16px;color:var(--text2);margin-bottom:6px;font-weight:500;}
+.empty-sub{font-size:13px;color:var(--muted);}
+
+/* ── Modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:200;align-items:center;justify-content:center;padding:24px;}
 .modal-overlay.open{display:flex;}
-.modal{background:var(--panel);border:1px solid var(--border);border-radius:16px;max-width:640px;width:100%;max-height:80vh;overflow-y:auto;padding:28px;animation:mIn .2s ease;}
-@keyframes mIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
-.modal-close{float:right;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;}
-.modal-close:hover{color:var(--text);}
-.modal-title{font-family:'DM Serif Display',serif;font-size:22px;color:var(--white);margin-bottom:6px;padding-right:24px;}
-.modal-dept{font-size:13px;color:var(--muted);margin-bottom:12px;}
-.modal-amount{font-family:'DM Mono',monospace;font-size:26px;color:var(--accent);margin-bottom:14px;}
-.modal-tags{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;}
-.modal-section{margin-top:16px;}
-.modal-stitle{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:8px;}
-.modal-section p{font-size:14px;color:var(--text);line-height:1.7;}
-.modal-link{display:inline-block;margin-top:20px;padding:11px 24px;background:var(--accent);color:var(--navy);border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;transition:all .2s;}
-.modal-link:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,229,160,.3);}
-/* Chatbot */
-#chatToggle{position:fixed;bottom:28px;right:28px;z-index:500;width:58px;height:58px;border-radius:50%;background:var(--accent2);color:#fff;border:none;cursor:pointer;font-size:24px;box-shadow:0 6px 28px rgba(79,109,255,.5);display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s;}
+.modal{background:var(--panel);border:1px solid var(--border2);border-radius:18px;max-width:660px;width:100%;max-height:82vh;overflow-y:auto;padding:32px;animation:mIn .2s ease;box-shadow:var(--shadow-lg);}
+@keyframes mIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+.modal::-webkit-scrollbar{width:4px;}
+.modal::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.modal-close{float:right;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted);font-size:18px;cursor:pointer;line-height:1;width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.modal-close:hover{color:var(--text);background:rgba(255,255,255,.1);}
+.modal-title{font-family:'DM Serif Display',serif;font-size:24px;color:var(--white);margin-bottom:5px;padding-right:40px;line-height:1.3;letter-spacing:-.2px;}
+.modal-dept{font-size:13px;color:var(--muted);margin-bottom:14px;}
+.modal-amount{font-family:'DM Mono',monospace;font-size:28px;color:var(--accent);margin-bottom:16px;letter-spacing:-.5px;}
+.modal-tags{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:4px;}
+.modal-section{margin-top:18px;}
+.modal-stitle{font-size:10.5px;letter-spacing:1.8px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:8px;}
+.modal-section p{font-size:14px;color:var(--text2);line-height:1.75;}
+.modal-link{display:inline-flex;align-items:center;gap:7px;margin-top:22px;padding:12px 24px;background:var(--accent);color:var(--navy);border-radius:9px;text-decoration:none;font-weight:700;font-size:14px;transition:all .2s;letter-spacing:.1px;}
+.modal-link:hover{background:#00c480;transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,214,143,.3);}
+
+/* ── Chatbot ── */
+#chatToggle{position:fixed;bottom:28px;right:28px;z-index:500;width:54px;height:54px;border-radius:50%;background:var(--accent2);color:#fff;border:none;cursor:pointer;box-shadow:0 6px 28px rgba(79,109,255,.55);display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s;}
 #chatToggle:hover{transform:scale(1.08);box-shadow:0 10px 36px rgba(79,109,255,.7);}
-.chat-notif{position:absolute;top:4px;right:4px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--navy);animation:pulse 1.5s infinite;}
-#chatWin{position:fixed;bottom:100px;right:28px;z-index:499;width:375px;height:520px;background:var(--panel);border:1px solid var(--border);border-radius:18px;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.6);transform:scale(.9) translateY(20px);opacity:0;transition:transform .25s cubic-bezier(.34,1.56,.64,1),opacity .2s;pointer-events:none;overflow:hidden;}
+#chatToggle svg{width:22px;height:22px;fill:currentColor;transition:opacity .15s;}
+.chat-notif{position:absolute;top:3px;right:3px;width:11px;height:11px;border-radius:50%;background:var(--accent);border:2px solid var(--navy);animation:pulse 2s infinite;}
+
+#chatWin{
+  position:fixed;bottom:96px;right:28px;z-index:499;
+  width:390px;height:560px;
+  background:var(--panel);
+  border:1px solid var(--border2);
+  border-radius:20px;
+  display:flex;flex-direction:column;
+  box-shadow:var(--shadow-lg);
+  transform:scale(.92) translateY(16px);
+  opacity:0;
+  transition:transform .28s cubic-bezier(.34,1.56,.64,1),opacity .2s;
+  pointer-events:none;
+  overflow:hidden;
+}
 #chatWin.open{transform:scale(1) translateY(0);opacity:1;pointer-events:all;}
-.chat-head{padding:14px 16px;background:linear-gradient(135deg,rgba(79,109,255,.25),rgba(0,229,160,.12));border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;}
-.chat-av{width:36px;height:36px;border-radius:50%;background:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
-.chat-name{font-weight:600;font-size:14px;color:var(--white);}
-.chat-sub{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;}
-.chat-sub::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 4px var(--accent);}
-.chat-x{margin-left:auto;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;}
-.chat-x:hover{color:var(--text);}
-.sec-bar{font-size:10px;padding:5px 14px;background:rgba(0,229,160,.05);border-bottom:1px solid rgba(0,229,160,.1);color:rgba(0,229,160,.7);display:flex;align-items:center;gap:5px;flex-shrink:0;font-family:'DM Mono',monospace;}
-.chat-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth;}
+
+.chat-head{
+  padding:14px 16px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:11px;
+  background:linear-gradient(135deg,rgba(79,109,255,.1),rgba(0,214,143,.05));
+  flex-shrink:0;
+}
+.chat-av{
+  width:38px;height:38px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent2),#7b96ff);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.chat-av svg{width:20px;height:20px;fill:#fff;}
+.chat-name{font-weight:600;font-size:14px;color:var(--white);letter-spacing:.1px;}
+.chat-sub{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;margin-top:1px;}
+.chat-online{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 5px var(--accent);flex-shrink:0;}
+.chat-x{margin-left:auto;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted);font-size:16px;cursor:pointer;line-height:1;width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;}
+.chat-x:hover{color:var(--text);background:rgba(255,255,255,.1);}
+
+.chat-msgs{flex:1;overflow-y:auto;padding:14px 14px 6px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth;}
 .chat-msgs::-webkit-scrollbar{width:3px;}
-.chat-msgs::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.chat-msgs::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+
 .msg{max-width:88%;display:flex;flex-direction:column;gap:3px;animation:msgIn .2s ease both;}
-@keyframes msgIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes msgIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 .msg.user{align-self:flex-end;}
 .msg.bot{align-self:flex-start;}
-.bubble{padding:10px 13px;border-radius:14px;font-size:13px;line-height:1.6;}
+.bubble{padding:10px 13px;border-radius:15px;font-size:13.5px;line-height:1.65;word-break:break-word;}
 .msg.user .bubble{background:var(--accent2);color:#fff;border-bottom-right-radius:4px;}
 .msg.bot .bubble{background:var(--ink);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px;}
+.msg.bot .bubble strong{color:var(--white);}
+.msg.bot .bubble em{color:var(--text2);}
 .msg-time{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;padding:0 3px;}
 .msg.user .msg-time{text-align:right;}
-.typing-ind{display:flex;align-items:center;gap:4px;padding:11px 13px;background:var(--ink);border:1px solid var(--border);border-radius:14px;border-bottom-left-radius:4px;width:fit-content;}
+
+/* Streaming cursor */
+.stream-cursor{display:inline-block;width:2px;height:14px;background:var(--accent);margin-left:2px;vertical-align:middle;animation:blink .7s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* Typing indicator */
+.typing-ind{display:flex;align-items:center;gap:4px;padding:11px 13px;background:var(--ink);border:1px solid var(--border);border-radius:15px;border-bottom-left-radius:4px;width:fit-content;}
 .tdot{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:td 1.2s infinite;}
 .tdot:nth-child(2){animation-delay:.2s;}.tdot:nth-child(3){animation-delay:.4s;}
 @keyframes td{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
-.chat-input-row{padding:10px 12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end;flex-shrink:0;}
-#chatInput{flex:1;background:var(--ink);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 12px;resize:none;max-height:80px;min-height:38px;line-height:1.5;}
-#chatInput:focus{outline:none;border-color:var(--accent2);}
-#chatSend{width:36px;height:36px;border-radius:9px;background:var(--accent2);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;transition:all .2s;}
-#chatSend:hover{background:#6b85ff;}
-#chatSend:disabled{opacity:.4;cursor:not-allowed;}
+
+/* Quick chips */
 .qchips{padding:0 12px 8px;display:flex;gap:5px;flex-wrap:wrap;}
-.qc{font-size:11px;padding:4px 9px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
-.qc:hover{border-color:var(--accent2);color:var(--accent2);}
+.qc{font-size:11.5px;padding:5px 10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.qc:hover{border-color:var(--accent2);color:#7b96ff;background:var(--accent2-dim);}
+
+/* Chat input */
+.chat-input-row{padding:10px 12px 12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end;flex-shrink:0;}
+#chatInput{flex:1;background:var(--ink);border:1px solid var(--border);border-radius:11px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13.5px;padding:9px 13px;resize:none;max-height:80px;min-height:38px;line-height:1.5;transition:border-color .18s;}
+#chatInput:focus{outline:none;border-color:var(--accent2);}
+#chatInput::placeholder{color:var(--muted);}
+#chatSend{width:36px;height:36px;border-radius:9px;background:var(--accent2);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;}
+#chatSend:hover{background:#6b85ff;box-shadow:0 4px 12px rgba(79,109,255,.4);}
+#chatSend:disabled{opacity:.35;cursor:not-allowed;box-shadow:none;}
+#chatSend svg{width:15px;height:15px;fill:currentColor;}
 </style>
 </head>
 <body>
@@ -150,20 +255,22 @@ input[type=range]{width:100%;height:4px;border-radius:2px;accent-color:var(--acc
 <header>
   <div class="wrap">
     <div class="header-inner">
-      <a class="logo" href="/" style="text-decoration:none;">
-        <div class="logo-icon">🏛️</div>
+      <a class="logo" href="/">
+        <div class="logo-mark">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.18L19 8.5v7L12 19.82 5 15.5v-7l7-4.32zM12 8a4 4 0 100 8 4 4 0 000-8zm0 2a2 2 0 110 4 2 2 0 010-4z"/></svg>
+        </div>
         <div class="logo-text">Grant<span>Scout</span> UK</div>
       </a>
-      <nav style="display:flex;gap:8px;align-items:center;">
-        <a href="index.html" style="font-size:13px;color:var(--accent);text-decoration:none;padding:7px 14px;border-radius:8px;border:1px solid rgba(0,229,160,.3);background:rgba(0,229,160,.06);">🔍 Find Grants</a>
-        <a href="apply.html" style="font-size:13px;color:var(--muted);text-decoration:none;padding:7px 14px;border-radius:8px;border:1px solid transparent;">✍️ Apply</a>
+      <nav class="header-nav">
+        <a href="index.html" class="nav-link active">Find Grants</a>
+        <a href="apply.html" class="nav-link">Apply</a>
       </nav>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div id="tierBadge" style="font-family:'DM Mono',monospace;font-size:10px;padding:3px 8px;border-radius:4px;letter-spacing:1px;display:none;"></div>
-        <span id="userEmail" style="font-size:12px;color:var(--muted);display:none;"></span>
-        <button id="upgradeBtn" onclick="doUpgrade()" style="display:none;font-size:12px;padding:6px 14px;border-radius:7px;border:none;background:var(--accent);color:var(--navy);font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;">⭐ Upgrade £9.99/mo</button>
-        <button id="manageBtn" onclick="doManage()" style="display:none;font-size:12px;padding:6px 14px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;cursor:pointer;">Manage Plan</button>
-        <button onclick="doLogout()" style="font-size:12px;padding:6px 14px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'DM Sans',sans-serif;cursor:pointer;">Log Out</button>
+      <div class="header-right">
+        <div id="tierBadge" class="tier-badge"></div>
+        <span id="userEmail" class="user-email"></span>
+        <button id="upgradeBtn" class="btn-sm btn-upgrade" onclick="doUpgrade()">Upgrade &mdash; £9.99/mo</button>
+        <button id="manageBtn" class="btn-sm btn-manage" onclick="doManage()">Manage Plan</button>
+        <button class="btn-sm btn-logout" onclick="doLogout()">Log Out</button>
       </div>
     </div>
   </div>
@@ -175,7 +282,10 @@ input[type=range]{width:100%;height:4px;border-radius:2px;accent-color:var(--acc
       <div class="panel">
         <div class="panel-title">Search</div>
         <button class="search-btn" id="searchBtn" onclick="startSearch()">
-          <span id="sBtnI">🔍</span><span id="sBtnT">Find Live Grants</span>
+          <span class="search-btn-icon" id="sBtnI">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+          </span>
+          <span id="sBtnT">Find Live Grants</span>
         </button>
       </div>
       <div class="panel">
@@ -258,7 +368,7 @@ input[type=range]{width:100%;height:4px;border-radius:2px;accent-color:var(--acc
 <!-- Modal -->
 <div class="modal-overlay" id="modal" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="modal">
-    <button class="modal-close" onclick="document.getElementById('modal').classList.remove('open')">×</button>
+    <button class="modal-close" onclick="document.getElementById('modal').classList.remove('open')">✕</button>
     <div class="modal-title" id="mTitle"></div>
     <div class="modal-dept" id="mDept"></div>
     <div class="modal-amount" id="mAmount"></div>
@@ -266,27 +376,32 @@ input[type=range]{width:100%;height:4px;border-radius:2px;accent-color:var(--acc
     <div class="modal-section"><div class="modal-stitle">About</div><p id="mDesc"></p></div>
     <div class="modal-section"><div class="modal-stitle">Who Can Apply</div><p id="mElig"></p></div>
     <div class="modal-section"><div class="modal-stitle">How to Apply</div><p id="mHow"></p></div>
-    <a class="modal-link" id="mLink" href="#" target="_blank" rel="noopener noreferrer">View on GOV.UK →</a>
+    <a class="modal-link" id="mLink" href="#" target="_blank" rel="noopener noreferrer">
+      View on GOV.UK
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+    </a>
   </div>
 </div>
 
 <!-- Chat Toggle -->
-<button id="chatToggle" onclick="toggleChat()">
-  <span id="ctIcon">💬</span>
+<button id="chatToggle" onclick="toggleChat()" aria-label="Open Grant Assistant">
+  <svg id="ctIconOpen" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>
+  <svg id="ctIconClose" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display:none"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
   <div class="chat-notif" id="chatNotif"></div>
 </button>
 
 <!-- Chat Window -->
 <div id="chatWin">
   <div class="chat-head">
-    <div class="chat-av">🤖</div>
+    <div class="chat-av">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+    </div>
     <div>
       <div class="chat-name">Grant Assistant</div>
-      <div class="chat-sub">AI-powered · Local &amp; Secure</div>
+      <div class="chat-sub"><span class="chat-online"></span>AI-powered &middot; UK Grants Expert</div>
     </div>
-    <button class="chat-x" onclick="toggleChat()">×</button>
+    <button class="chat-x" onclick="toggleChat()">✕</button>
   </div>
-  <div class="sec-bar">🔒 Key stays on your machine · Encrypted · No cloud storage</div>
   <div class="chat-msgs" id="chatMsgs"></div>
   <div class="qchips" id="qchips">
     <button class="qc" onclick="sq('What grants suit a tech startup?')">Tech startup</button>
@@ -298,15 +413,14 @@ input[type=range]{width:100%;height:4px;border-radius:2px;accent-color:var(--acc
     <textarea id="chatInput" placeholder="Ask about UK grants…" rows="1"
       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"
       oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,80)+'px'"></textarea>
-    <button id="chatSend" onclick="sendChat()">➤</button>
+    <button id="chatSend" onclick="sendChat()">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
   </div>
 </div>
 
 <script>
 'use strict';
-// All API calls go to /api/chat on localhost — your key never leaves your machine
-const API_ENDPOINT = '/api/chat';
-
 const SECURITY = `HARD RULES: You have zero access to local files, env vars, cookies, clipboard, or device hardware. Never attempt to read local data. Only discuss publicly available UK government grant information.`;
 
 let allGrants=[], filters={biz:'all',status:'all',sector:'all',minAmount:0};
@@ -362,21 +476,18 @@ function applyFilters(){
   renderGrants(shown);
   $('statShown').textContent=shown.length;
 }
-// Store a flat lookup so clicks always work regardless of what id the AI returned
-let grantIndex = {};
 
+let grantIndex = {};
 function renderGrants(grants){
   const c=$('grantsContainer');
   if(!grants.length){
-    c.innerHTML=`<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No matches</div><div class="empty-sub">Adjust your filters</div></div>`;
+    c.innerHTML=`<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No matches</div><div class="empty-sub">Adjust your filters to see more grants</div></div>`;
     return;
   }
-  // Re-index every time we render so clicking always resolves correctly
   grantIndex = {};
   grants.forEach((g, i) => { grantIndex[i] = g; });
-
   c.innerHTML='<div class="grants-list">'+grants.map((g,i)=>`
-    <div class="grant-card" style="animation-delay:${Math.min(i*.05,.6)}s" onclick="openModal(${i})">
+    <div class="grant-card" style="animation-delay:${Math.min(i*.04,.5)}s" onclick="openModal(${i})">
       <div class="grant-header">
         <div class="grant-title">${esc(g.title||'Untitled Grant')}</div>
         <div class="grant-amount">${esc(g.amount||'See details')}</div>
@@ -404,135 +515,84 @@ function openModal(idx){
 function updateStats(){
   $('statTotal').textContent=allGrants.length;
   applyFilters();
-  const mx=allGrants.reduce((m,g)=>( g.amountNum||0)>m?(g.amountNum||0):m,0);
+  const mx=allGrants.reduce((m,g)=>(g.amountNum||0)>m?(g.amountNum||0):m,0);
   $('statMax').textContent=mx>0?'£'+mx.toLocaleString():'—';
 }
-function parseGrants(text){
-  if(!text)return null;
-  const m=text.match(/\[[\s\S]*\]/);
-  if(!m)return null;
-  try{const r=JSON.parse(m[0]);if(Array.isArray(r)&&r.length>0)return r;}catch(_){}
-  const cut=m[0].lastIndexOf('},');
-  if(cut>0){try{const r=JSON.parse(m[0].slice(0,cut+1)+']');if(Array.isArray(r)&&r.length>0)return r;}catch(_){}}
-  return null;
-}
 
-async function callAPI(body, action){
-  if(action) body._action = action;
-  const token = localStorage.getItem('gs_token') || '';
-  const resp=await fetch(API_ENDPOINT,{
-    method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
-    body:JSON.stringify(body)
-  });
-  const data = await resp.json().catch(()=>({}));
-  if(resp.status===401){ window.location.href='login.html'; throw new Error('Not logged in'); }
-  if(resp.status===403){
-    showUpgradeModal(data.error || 'Upgrade to Premium to access this feature.');
-    throw new Error(data.error || 'Upgrade required');
-  }
-  if(!resp.ok) throw new Error(`Server ${resp.status}: ${JSON.stringify(data).slice(0,150)}`);
-  return data;
-}
-
-function showUpgradeModal(msg){
-  let m = document.getElementById('upgradeModal');
-  if(!m){
-    m = document.createElement('div');
-    m.id='upgradeModal';
-    m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:999;display:flex;align-items:center;justify-content:center;padding:24px;';
-    m.innerHTML=`<div style="background:var(--panel);border:1px solid var(--border);border-radius:16px;max-width:400px;width:100%;padding:28px;text-align:center;">
-      <div style="font-size:32px;margin-bottom:12px;">⭐</div>
-      <div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--white);margin-bottom:8px;">Upgrade to Premium</div>
-      <div id="upgradeModalMsg" style="font-size:14px;color:var(--muted);margin-bottom:20px;line-height:1.6;"></div>
-      <div style="background:var(--ink);border:1px solid rgba(0,229,160,.2);border-radius:10px;padding:14px;margin-bottom:20px;">
-        <div style="font-family:'DM Mono',monospace;font-size:24px;color:var(--accent);">£9.99<span style="font-size:14px;color:var(--muted)">/month</span></div>
-        <div style="font-size:12px;color:var(--text);margin-top:6px;line-height:1.7;">Unlimited searches · Unlimited applications<br>Full AI writing assistant · Score feature<br>Apple Pay · Google Pay · Card</div>
-      </div>
-      <button onclick="doUpgrade()" style="width:100%;padding:13px;background:var(--accent);color:var(--navy);border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:10px;">Upgrade Now</button>
-      <button onclick="document.getElementById('upgradeModal').remove()" style="width:100%;padding:10px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer;">Maybe Later</button>
-    </div>`;
-    document.body.appendChild(m);
-    m.addEventListener('click', e=>{ if(e.target===m) m.remove(); });
-  }
-  document.getElementById('upgradeModalMsg').textContent = msg;
-}
-
+/* ── Search ── */
 async function startSearch(){
   if(busy)return;
   busy=true; allGrants=[];
-  $('searchBtn').disabled=true; $('sBtnT').textContent='Searching…'; $('sBtnI').textContent='⏳';
+  $('searchBtn').disabled=true;
+  $('sBtnT').textContent='Searching…';
+  $('sBtnI').innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="animation:spin 1s linear infinite"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0020 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 004 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
   $('progressSteps').innerHTML='';
   $('progressWrap').classList.add('show');
-  $('grantsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Scanning GOV.UK…</div></div>';
-  setAI('thinking','Searching GOV.UK for live grants… <span class="blink"></span>');
+  $('grantsContainer').innerHTML='<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Scanning GOV.UK…</div><div class="empty-sub">This may take up to 30 seconds on first load</div></div>';
+  setAI('thinking','Searching GOV.UK for live grants…');
   setProgress(10,'Connecting to GOV.UK…');
   activateStep('Searching');
 
-  // Animate progress while server does the work
-  let pct = 10;
-  const ticker = setInterval(() => {
-    pct = Math.min(pct + 3, 88);
-    const msgs = ['Searching Innovate UK…','Searching DEFRA…','Searching British Business Bank…',
-      'Searching UKRI…','Searching DESNZ…','Compiling results…'];
-    setProgress(pct, msgs[Math.floor((pct-10)/14)] || 'Processing…');
-  }, 2000);
+  let pct=10;
+  const msgs=['Searching Innovate UK…','Searching DEFRA…','Searching British Business Bank…','Searching UKRI…','Searching DESNZ…','Compiling results…'];
+  const ticker=setInterval(()=>{
+    pct=Math.min(pct+3,88);
+    setProgress(pct,msgs[Math.floor((pct-10)/14)]||'Processing…');
+  },2000);
 
   try{
-    const token = localStorage.getItem('gs_token') || '';
-    const resp = await fetch('/api/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }
+    const token=localStorage.getItem('gs_token')||'';
+    const resp=await fetch('/api/search',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}
     });
-
     clearInterval(ticker);
-
-    if(resp.status === 401){ window.location.href='login.html'; return; }
-
-    if(resp.status === 403){
-      const d = await resp.json();
-      showUpgradeModal(d.error || 'Upgrade to search for grants.');
+    if(resp.status===401){window.location.href='login.html';return;}
+    if(resp.status===403){
+      const d=await resp.json();
+      showUpgradeModal(d.error||'Upgrade to search for grants.');
       setProgress(100,'Search limit reached');
-      allGrants=getFallback(); updateStats();
+      allGrants=getFallback();updateStats();
       setAI('active','Search limit reached. Showing cached grants.');
       setTimeout(()=>$('progressWrap').classList.remove('show'),4000);
       return;
     }
-
     if(!resp.ok){
-      const d = await resp.json().catch(()=>({}));
-      throw new Error(d.error || `Server error ${resp.status}`);
+      const d=await resp.json().catch(()=>({}));
+      throw new Error(d.error||`Server error ${resp.status}`);
     }
-
-    const data = await resp.json();
-    const grants = data.grants;
-    const searches = data.searches || 0;
-
-    if(!grants || !grants.length) throw new Error('No grants returned');
-
-    allGrants = grants;
-    setProgress(100, `✅ ${grants.length} grants loaded from GOV.UK`);
+    const data=await resp.json();
+    const grants=data.grants;
+    const searches=data.searches||0;
+    const fromCache=data.cached||false;
+    if(!grants||!grants.length)throw new Error('No grants returned');
+    allGrants=grants;
+    setProgress(100,`✅ ${grants.length} grants loaded`);
     updateStats();
     doneStep('Searching');
     addStep('Complete','done');
-    setAI('active', `✅ <strong>${grants.length} live grants</strong> found via ${searches} GOV.UK searches. Click any card for details.`);
-    setTimeout(()=>$('progressWrap').classList.remove('show'),3000);
-
+    if(fromCache){
+      setAI('active',`✅ <strong>${grants.length} grants</strong> loaded instantly from cache. <span class="ai-cached-badge">CACHED</span>`);
+    } else {
+      setAI('active',`✅ <strong>${grants.length} live grants</strong> found via ${searches} GOV.UK searches.`);
+    }
+    setTimeout(()=>$('progressWrap').classList.remove('show'),2500);
   }catch(err){
     clearInterval(ticker);
     console.error('Search error:',err);
-    allGrants=getFallback(); updateStats();
+    allGrants=getFallback();updateStats();
     if(err.message.includes('429')||err.message.includes('rate')){
       setProgress(100,'Rate limited — try again in 30 seconds');
       setAI('thinking','⏳ <strong>Rate limit reached</strong> — wait 30 seconds then click Refresh.');
     } else {
       setProgress(100,'Using cached grants');
-      setAI('active','Showing cached grants. Live search will retry automatically next time.');
+      setAI('active','Showing cached grants. Live search will retry next time.');
     }
     setTimeout(()=>$('progressWrap').classList.remove('show'),5000);
   }
-
-  $('searchBtn').disabled=false; $('sBtnT').textContent='Refresh'; $('sBtnI').textContent='🔄';
+  $('searchBtn').disabled=false;
+  $('sBtnT').textContent='Refresh';
+  $('sBtnI').innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>';
   busy=false;
 }
 
@@ -540,61 +600,141 @@ async function startSearch(){
 function toggleChat(){
   chatOpen=!chatOpen;
   $('chatWin').classList.toggle('open',chatOpen);
-  $('ctIcon').textContent=chatOpen?'✕':'💬';
+  $('ctIconOpen').style.display=chatOpen?'none':'';
+  $('ctIconClose').style.display=chatOpen?'':'none';
   $('chatNotif').style.display=chatOpen?'none':'';
-  if(chatOpen&&chatHistory.length===0)addBotMsg("Hi! 👋 I'm your UK Grants Assistant. Ask me about finding grants, eligibility criteria, or how to apply.");
+  if(chatOpen&&chatHistory.length===0){
+    addBotMsg("Hi! I'm your UK Grants Assistant. I can help you find the right grants, understand eligibility criteria, and guide you through the application process. What would you like to know?");
+  }
 }
+
 function addUserMsg(text){
-  const el=document.createElement('div'); el.className='msg user';
+  const el=document.createElement('div');el.className='msg user';
   el.innerHTML=`<div class="bubble">${esc(text)}</div><div class="msg-time">${ts()}</div>`;
-  $('chatMsgs').appendChild(el); $('chatMsgs').scrollTop=9999;
+  $('chatMsgs').appendChild(el);scrollChat();
 }
+
 function addBotMsg(html){
   document.getElementById('typing-ind')?.remove();
-  const el=document.createElement('div'); el.className='msg bot';
+  const el=document.createElement('div');el.className='msg bot';
   el.innerHTML=`<div class="bubble">${html}</div><div class="msg-time">${ts()}</div>`;
-  $('chatMsgs').appendChild(el); $('chatMsgs').scrollTop=9999;
+  $('chatMsgs').appendChild(el);scrollChat();
+  return el;
 }
+
 function showTyping(){
   document.getElementById('typing-ind')?.remove();
-  const el=document.createElement('div'); el.className='msg bot'; el.id='typing-ind';
+  const el=document.createElement('div');el.className='msg bot';el.id='typing-ind';
   el.innerHTML=`<div class="typing-ind"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div>`;
-  $('chatMsgs').appendChild(el); $('chatMsgs').scrollTop=9999;
+  $('chatMsgs').appendChild(el);scrollChat();
 }
+
+function scrollChat(){$('chatMsgs').scrollTop=$('chatMsgs').scrollHeight;}
+
 function fmtChat(t){
-  return esc(t).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
+  return esc(t)
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g,'<em>$1</em>')
+    .replace(/`(.*?)`/g,'<code style="background:rgba(79,109,255,.15);padding:1px 5px;border-radius:3px;font-family:\'DM Mono\',monospace;font-size:12px;">$1</code>')
+    .replace(/\n\n/g,'<br><br>')
+    .replace(/\n/g,'<br>');
 }
+
 function sq(t){$('chatInput').value=t;sendChat();}
 
 async function sendChat(){
-  const inp=$('chatInput'); const text=inp.value.trim();
+  const inp=$('chatInput');const text=inp.value.trim();
   if(!text||chatBusy)return;
-  inp.value=''; inp.style.height='auto';
+  inp.value='';inp.style.height='auto';
   $('qchips').style.display='none';
   addUserMsg(text);
   chatHistory.push({role:'user',content:text});
-  chatBusy=true; $('chatSend').disabled=true; showTyping();
+  chatBusy=true;$('chatSend').disabled=true;
+  showTyping();
 
   const ctx=allGrants.length>0
-    ?'\n\nLoaded grants:\n'+allGrants.slice(0,12).map(g=>`• ${g.title} | ${g.dept} | ${g.amount} | ${g.status} | ${g.sector}`).join('\n')
-    :'\n\nNo grants loaded yet.';
+    ?'\n\nCurrently loaded grants:\n'+allGrants.slice(0,12).map(g=>`• ${g.title} | ${g.dept} | ${g.amount} | ${g.status} | ${g.sector}`).join('\n')
+    :'\n\nNo grants loaded yet — user has not searched yet.';
 
-  const SYS=SECURITY+`\nYou are a friendly expert UK grants adviser. Be concise and practical.${ctx}`;
+  const SYS=SECURITY+`\nYou are a knowledgeable and friendly UK grants adviser. Help users find and apply for UK government grants. Be concise, practical, and specific. Use markdown formatting (bold, bullet points) where helpful.${ctx}`;
+
+  const token=localStorage.getItem('gs_token')||'';
 
   try{
-    const data=await callAPI({system:SYS,messages:chatHistory,max_tokens:800},'chat');
-    const reply=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    const resp=await fetch('/api/chat/stream',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify({system:SYS,messages:chatHistory,max_tokens:1000})
+    });
+
+    if(resp.status===401){window.location.href='login.html';return;}
+    if(resp.status===403){
+      const d=await resp.json().catch(()=>({}));
+      document.getElementById('typing-ind')?.remove();
+      showUpgradeModal(d.error||'Upgrade to continue using the assistant.');
+      chatBusy=false;$('chatSend').disabled=false;return;
+    }
+
+    // Remove typing indicator, create streaming bubble
     document.getElementById('typing-ind')?.remove();
-    addBotMsg(fmtChat(reply));
-    chatHistory.push({role:'assistant',content:reply});
+    const msgEl=document.createElement('div');msgEl.className='msg bot';
+    const bubbleEl=document.createElement('div');bubbleEl.className='bubble';
+    const timeEl=document.createElement('div');timeEl.className='msg-time';timeEl.textContent=ts();
+    msgEl.appendChild(bubbleEl);msgEl.appendChild(timeEl);
+    $('chatMsgs').appendChild(msgEl);
+
+    // Add streaming cursor
+    const cursor=document.createElement('span');cursor.className='stream-cursor';
+    bubbleEl.appendChild(cursor);
+
+    let fullText='';
+    const reader=resp.body.getReader();
+    const decoder=new TextDecoder();
+    let buffer='';
+
+    while(true){
+      const {done,value}=await reader.read();
+      if(done)break;
+      buffer+=decoder.decode(value,{stream:true});
+      const lines=buffer.split('\n');
+      buffer=lines.pop();
+      for(const line of lines){
+        if(!line.startsWith('data: '))continue;
+        const data=line.slice(6).trim();
+        if(data==='[DONE]')break;
+        try{
+          const evt=JSON.parse(data);
+          if(evt.text){
+            fullText+=evt.text;
+            // Update bubble with formatted text + cursor
+            bubbleEl.innerHTML=fmtChat(fullText);
+            bubbleEl.appendChild(cursor);
+            scrollChat();
+          }
+          if(evt.error){
+            bubbleEl.innerHTML=`<span style="color:#ff6b6b">Error: ${esc(evt.error)}</span>`;
+            bubbleEl.appendChild(cursor);
+          }
+        }catch(_){}
+      }
+    }
+
+    // Remove cursor, finalise
+    cursor.remove();
+    bubbleEl.innerHTML=fmtChat(fullText);
+    chatHistory.push({role:'assistant',content:fullText});
     if(chatHistory.length>20)chatHistory=chatHistory.slice(-20);
+    scrollChat();
+
   }catch(err){
     document.getElementById('typing-ind')?.remove();
-    addBotMsg(`Error: ${esc(err.message.slice(0,100))}. Is the server running?`);
+    addBotMsg(`<span style="color:#ff6b6b">Something went wrong. Please try again.</span>`);
+    console.error('Chat error:',err);
   }
-  chatBusy=false; $('chatSend').disabled=false;
+  chatBusy=false;$('chatSend').disabled=false;
 }
 
+/* ── Fallback grants ── */
 function getFallback(){return[
   {id:1,title:"Innovate UK Smart Grants",dept:"Innovate UK",amount:"Up to £2,000,000",amountNum:2000000,summary:"Ambitious R&D grants for UK businesses developing genuinely disruptive innovations. Up to 70% project costs covered.",description:"Smart Grants fund innovative R&D projects with clear market opportunity and economic impact potential. Projects run 6–36 months with comprehensive support.",eligibility:"UK-registered businesses of all sizes with novel, technically challenging innovations.",howToApply:"Apply via the Innovate UK portal in competitive rounds with project proposal and financials.",sector:"innovation",bizTypes:["sme","startup","tech","manufacturing"],status:"open",deadline:"Rolling",url:"https://www.ukri.org/councils/innovate-uk/"},
   {id:2,title:"UK Shared Prosperity Fund",dept:"Dept for Levelling Up",amount:"Variable",amountNum:500000,summary:"£2.6bn local fund for business support, skills, and community development across the UK.",description:"Distributed by local authorities to support businesses and communities. Amounts and priorities vary by region.",eligibility:"Businesses and organisations in eligible areas — contact your local council.",howToApply:"Apply through your local authority's economic development team.",sector:"skills",bizTypes:["sme","charity","social","retail"],status:"open",deadline:"31 March 2026",url:"https://www.gov.uk/government/collections/uk-shared-prosperity-fund"},
@@ -603,32 +743,51 @@ function getFallback(){return[
   {id:5,title:"Start Up Loans",dept:"British Business Bank",amount:"Up to £25,000",amountNum:25000,summary:"Government-backed loans at 6% fixed rate plus 12 months free mentoring for new businesses.",description:"Personal loans for starting or growing UK businesses, with free business planning support included.",eligibility:"UK residents 18+ with a business trading under 36 months.",howToApply:"Apply at startuploans.co.uk or through an approved delivery partner.",sector:"skills",bizTypes:["startup","sme","retail","social"],status:"open",deadline:"Rolling",url:"https://www.startuploans.co.uk/"},
   {id:6,title:"Made Smarter Adoption",dept:"Dept for Business and Trade",amount:"Up to £20,000",amountNum:20000,summary:"Helping SME manufacturers adopt AI, robotics and IoT to boost productivity.",description:"Funded digital reviews, roadmaps, and grants for industrial digital technology adoption.",eligibility:"SME manufacturers in eligible English regions with under 250 employees.",howToApply:"Contact your regional Made Smarter hub for a digital readiness assessment.",sector:"digital",bizTypes:["sme","manufacturing"],status:"open",deadline:"Rolling",url:"https://www.madesmarter.uk/"},
   {id:7,title:"Community Ownership Fund",dept:"Dept for Levelling Up",amount:"Up to £1,000,000",amountNum:1000000,summary:"Grants helping communities buy local assets at risk of closure, with match funding required.",description:"Supports purchase of pubs, sports clubs, community centres and shops facing closure.",eligibility:"Constituted community organisations with match funding available.",howToApply:"Apply via the Community Ownership Fund portal with a business plan.",sector:"property",bizTypes:["charity","social"],status:"open",deadline:"Quarterly",url:"https://www.gov.uk/guidance/community-ownership-fund"},
-  {id:8,title:"Arts Council Project Grants",dept:"Arts Council England",amount:"£1,000–£100,000",amountNum:100000,summary:"Rolling open-access fund for arts, museums and libraries projects across England.",description:"Supports creative projects and new commissions. Available to individuals and non-profit organisations.",eligibility:"Individuals and non-profits in England working in arts, museums or libraries.",howToApply:"Apply online via Grantium with project description and budget.",sector:"skills",bizTypes:["charity","social"],status:"open",deadline:"Rolling",url:"https://www.artscouncil.org.uk/project-grants"},
-  {id:9,title:"Sustainable Innovation Fund",dept:"Innovate UK",amount:"Up to £175,000",amountNum:175000,summary:"Accelerates R&D on sustainable technologies across clean energy, transport and circular economy.",description:"Covers up to 100% of eligible project costs for SMEs developing environmental innovations.",eligibility:"UK registered SMEs with an innovative sustainability-focused project.",howToApply:"Apply via Innovate UK portal with environmental impact evidence.",sector:"green",bizTypes:["sme","startup","tech"],status:"open",deadline:"Rolling",url:"https://www.ukri.org/opportunity/sustainable-innovation-fund/"},
-  {id:10,title:"Gigabit Broadband Voucher Scheme",dept:"DSIT",amount:"Up to £4,500",amountNum:4500,summary:"Vouchers subsidising gigabit broadband installation for rural and hard-to-reach businesses.",description:"For premises not covered by commercial gigabit rollout to connect to high-speed internet.",eligibility:"Businesses in areas not scheduled for commercial gigabit deployment.",howToApply:"Check eligibility at gigabitvoucher.culture.gov.uk and find a registered supplier.",sector:"digital",bizTypes:["sme","farming","retail","manufacturing"],status:"open",deadline:"Rolling",url:"https://gigabitvoucher.culture.gov.uk/"}
+  {id:8,title:"Sustainable Innovation Fund",dept:"Innovate UK",amount:"Up to £175,000",amountNum:175000,summary:"Accelerates R&D on sustainable technologies across clean energy, transport and circular economy.",description:"Covers up to 100% of eligible project costs for SMEs developing environmental innovations.",eligibility:"UK registered SMEs with an innovative sustainability-focused project.",howToApply:"Apply via Innovate UK portal with environmental impact evidence.",sector:"green",bizTypes:["sme","startup","tech"],status:"open",deadline:"Rolling",url:"https://www.ukri.org/opportunity/sustainable-innovation-fund/"},
 ];}
 
-
-/* ── Auth + Tier UI ── */
-function initAuth(){
-  const token = localStorage.getItem('gs_token');
-  if(!token){ window.location.href='login.html'; return; }
-  const email = localStorage.getItem('gs_email') || '';
-  const tier  = localStorage.getItem('gs_tier')  || 'free';
-  document.getElementById('userEmail').textContent = email;
-  document.getElementById('userEmail').style.display = '';
-  const badge = document.getElementById('tierBadge');
-  badge.style.display='';
-  if(tier==='premium'){
-    badge.textContent='⭐ PREMIUM';
-    badge.style.cssText+='background:rgba(0,229,160,.1);color:var(--accent);border:1px solid rgba(0,229,160,.3);';
-    document.getElementById('manageBtn').style.display='';
-  } else {
-    badge.textContent='FREE';
-    badge.style.cssText+='background:rgba(107,122,158,.1);color:var(--muted);border:1px solid var(--border);';
-    document.getElementById('upgradeBtn').style.display='';
+/* ── Upgrade modal ── */
+function showUpgradeModal(msg){
+  let m=document.getElementById('upgradeModal');
+  if(!m){
+    m=document.createElement('div');m.id='upgradeModal';
+    m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);z-index:999;display:flex;align-items:center;justify-content:center;padding:24px;';
+    m.innerHTML=`<div style="background:var(--panel);border:1px solid var(--border2);border-radius:18px;max-width:400px;width:100%;padding:32px;text-align:center;box-shadow:var(--shadow-lg);">
+      <div style="width:52px;height:52px;border-radius:14px;background:rgba(0,214,143,.1);border:1px solid rgba(0,214,143,.2);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px;">⭐</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--white);margin-bottom:8px;letter-spacing:-.2px;">Upgrade to Premium</div>
+      <div id="upgradeModalMsg" style="font-size:14px;color:var(--text2);margin-bottom:22px;line-height:1.65;"></div>
+      <div style="background:var(--ink);border:1px solid rgba(0,214,143,.2);border-radius:12px;padding:16px;margin-bottom:22px;">
+        <div style="font-family:'DM Mono',monospace;font-size:26px;color:var(--accent);letter-spacing:-.5px;">£9.99<span style="font-size:14px;color:var(--muted)">/month</span></div>
+        <div style="font-size:12.5px;color:var(--text2);margin-top:8px;line-height:1.7;">Unlimited searches &middot; Unlimited applications<br>Full AI writing assistant &middot; Score feature</div>
+      </div>
+      <button onclick="doUpgrade()" style="width:100%;padding:13px;background:var(--accent);color:var(--navy);border:none;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;transition:all .2s;" onmouseover="this.style.background='#00c480'" onmouseout="this.style.background='var(--accent)'">Upgrade Now</button>
+      <button onclick="document.getElementById('upgradeModal').remove()" style="width:100%;padding:10px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:10px;font-family:'DM Sans',sans-serif;font-size:14px;cursor:pointer;">Maybe Later</button>
+    </div>`;
+    document.body.appendChild(m);
+    m.addEventListener('click',e=>{if(e.target===m)m.remove();});
   }
-  // Check for upgrade success redirect
+  document.getElementById('upgradeModalMsg').textContent=msg;
+}
+
+/* ── Auth ── */
+function initAuth(){
+  const token=localStorage.getItem('gs_token');
+  if(!token){window.location.href='login.html';return;}
+  const email=localStorage.getItem('gs_email')||'';
+  const tier=localStorage.getItem('gs_tier')||'free';
+  const emailEl=$('userEmail');
+  if(emailEl){emailEl.textContent=email;emailEl.style.display='';}
+  const badge=$('tierBadge');
+  if(badge){
+    badge.style.display='';
+    if(tier==='premium'){
+      badge.textContent='PREMIUM';badge.className='tier-badge premium';
+      const mb=$('manageBtn');if(mb)mb.style.display='';
+    } else {
+      badge.textContent='FREE';badge.className='tier-badge free';
+      const ub=$('upgradeBtn');if(ub)ub.style.display='';
+    }
+  }
   if(location.search.includes('upgraded=1')){
     localStorage.setItem('gs_tier','premium');
     history.replaceState({},'',location.pathname);
@@ -637,48 +796,40 @@ function initAuth(){
 }
 
 async function doUpgrade(){
-  const btns = document.querySelectorAll('#upgradeBtn, [onclick="doUpgrade()"]');
-  btns.forEach(b=>{ b.disabled=true; b.textContent='Opening checkout…'; });
+  const btns=document.querySelectorAll('#upgradeBtn,[onclick="doUpgrade()"]');
+  btns.forEach(b=>{b.disabled=true;b.textContent='Opening checkout…';});
   try{
     const token=localStorage.getItem('gs_token')||'';
-    const r=await fetch('/api/checkout',{method:'POST',headers:{
-      'Content-Type':'application/json','Authorization':'Bearer '+token
-    }});
+    const r=await fetch('/api/checkout',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}});
     const d=await r.json().catch(()=>({}));
-    if(d.url){
-      window.location.href=d.url;
-    } else {
-      showUpgradeModal('Checkout error: '+(d.error||'Please try again or contact support.'));
-      btns.forEach(b=>{ b.disabled=false; b.textContent='⭐ Upgrade £9.99/mo'; });
-    }
+    if(d.url){window.location.href=d.url;}
+    else{showUpgradeModal('Checkout error: '+(d.error||'Please try again.'));btns.forEach(b=>{b.disabled=false;b.textContent='Upgrade — £9.99/mo';});}
   }catch(e){
-    showUpgradeModal('Connection error — make sure you are logged in and try again.');
-    btns.forEach(b=>{ b.disabled=false; b.textContent='⭐ Upgrade £9.99/mo'; });
+    showUpgradeModal('Connection error — please try again.');
+    btns.forEach(b=>{b.disabled=false;b.textContent='Upgrade — £9.99/mo';});
   }
 }
-
 async function doManage(){
   try{
     const token=localStorage.getItem('gs_token')||'';
-    const r=await fetch('/api/portal',{method:'POST',headers:{
-      'Content-Type':'application/json','Authorization':'Bearer '+token
-    }});
+    const r=await fetch('/api/portal',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}});
     const d=await r.json().catch(()=>({}));
-    if(d.url) window.location.href=d.url;
+    if(d.url)window.location.href=d.url;
     else alert('Could not open billing portal: '+(d.error||'Please try again.'));
-  }catch(e){ alert('Connection error: '+e.message); }
+  }catch(e){alert('Connection error: '+e.message);}
 }
-
 function doLogout(){
-  localStorage.removeItem('gs_token');
-  localStorage.removeItem('gs_email');
-  localStorage.removeItem('gs_tier');
+  localStorage.removeItem('gs_token');localStorage.removeItem('gs_email');localStorage.removeItem('gs_tier');
   window.location.href='login.html';
 }
 
+/* ── Spin animation ── */
+const style=document.createElement('style');
+style.textContent='@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}';
+document.head.appendChild(style);
+
 initAuth();
 setAI('','Ready. Click <strong>Find Live Grants</strong> to search GOV.UK.');
-
 </script>
 </body>
 </html>
