@@ -1,4 +1,3 @@
-const http  = require('http');
 const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
@@ -46,7 +45,7 @@ const MIME = {
   '.css':'text/css',   '.json':'application/json', '.ico':'image/x-icon'
 };
 
-// ── In-memory grant cache for fast repeat searches ─────────────────────────
+// ── In-memory grant cache for fallback only (not primary) ──────────────────
 let memGrantCache = null;
 let memGrantCacheTime = 0;
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -148,160 +147,184 @@ const SB_HOST = SUPABASE_URL.replace('https://','');
 
 async function sbQuery(table, filter) {
   const res = await jsonReq(SB_HOST, `/rest/v1/${table}?${filter}&limit=1`, 'GET', null, {
-    'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Accept': 'application/json'
+    'Authorization': `Bearer ${SUPABASE_KEY}`,
+    'Prefer': 'return=representation'
   });
-  return Array.isArray(res.body) ? res.body[0] : null;
+  const data = res.body;
+  return Array.isArray(data) ? data[0] : data;
 }
-async function sbInsert(table, data) {
-  return jsonReq(SB_HOST, `/rest/v1/${table}`, 'POST', data, {
-    'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`,
+
+async function sbInsert(table, obj) {
+  const res = await jsonReq(SB_HOST, `/rest/v1/${table}`, 'POST', obj, {
+    'Authorization': `Bearer ${SUPABASE_KEY}`,
+    'Prefer': 'return=representation'
+  });
+  return Array.isArray(res.body) ? res.body[0] : res.body;
+}
+
+async function sbUpdate(table, filter, obj) {
+  return await jsonReq(SB_HOST, `/rest/v1/${table}?${filter}`, 'PATCH', obj, {
+    'Authorization': `Bearer ${SUPABASE_KEY}`,
     'Prefer': 'return=representation'
   });
 }
-async function sbUpdate(table, filter, data) {
-  return jsonReq(SB_HOST, `/rest/v1/${table}?${filter}`, 'PATCH', data, {
-    'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`,
-    'Prefer': 'return=representation'
-  });
-}
 
-// ── Password hashing (no bcrypt, use SHA-256+salt for simplicity) ──────────
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.createHmac('sha256', salt).update(password).digest('hex');
-  return `${salt}:${hash}`;
-}
-function verifyPassword(password, stored) {
-  const [salt, hash] = stored.split(':');
-  const attempt = crypto.createHmac('sha256', salt).update(password).digest('hex');
-  return attempt === hash;
-}
+// ── Anthropic helpers ──────────────────────────────────────────────────────
+let anthropicQueue = [];
+let anthropicProcessing = false;
 
-// ── Request body reader ────────────────────────────────────────────────────
-function readBody(req) {
+function enqueue(fn) {
   return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', c => chunks.push(c));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
+    anthropicQueue.push({ fn, resolve, reject });
+    processQueue();
   });
 }
 
-// ── Anthropic queue (one call at a time to avoid 429s) ────────────────────
-let qRunning = false;
-const queue = [];
-function enqueue(task) {
-  return new Promise((resolve, reject) => {
-    queue.push({ task, resolve, reject });
-    processQ();
-  });
-}
-async function processQ() {
-  if (qRunning || !queue.length) return;
-  qRunning = true;
-  const { task, resolve, reject } = queue.shift();
-  try { resolve(await task()); } catch(e) { reject(e); }
-  finally { qRunning = false; await sleep(300); processQ(); }
-}
-
-async function callAnthropic(payload, retries = 4) {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    const result = await new Promise((resolve, reject) => {
-      const opts = {
-        hostname: 'api.anthropic.com', path: '/v1/messages', method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(payload),
-          'x-api-key': ANTHROPIC_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-beta': 'web-search-2025-03-05'
-        }
-      };
-      const req = https.request(opts, res => {
-        let d = ''; res.on('data', c => d += c);
-        res.on('end', () => resolve({ status: res.statusCode, body: d }));
-      });
-      req.on('error', reject);
-      req.write(payload); req.end();
-    });
-    if (result.status !== 429 && result.status !== 529) return result;
-    let wait = Math.pow(2, attempt) * 3000;
-    try {
-      const p = JSON.parse(result.body);
-      if (p.error?.retry_after) wait = p.error.retry_after * 1000 + 500;
-    } catch(_) {}
-    console.log(`429 — waiting ${wait/1000}s (attempt ${attempt}/${retries})`);
-    if (attempt < retries) await sleep(wait); else return result;
+async function processQueue() {
+  if (anthropicProcessing || anthropicQueue.length === 0) return;
+  anthropicProcessing = true;
+  while (anthropicQueue.length > 0) {
+    const { fn, resolve, reject } = anthropicQueue.shift();
+    try { resolve(await fn()); }
+    catch(e) { reject(e); }
+    await sleep(100);
   }
+  anthropicProcessing = false;
 }
 
-// ── Streaming Anthropic call — pipes SSE to client response ───────────────
-function streamAnthropic(payload, res) {
+function callAnthropic(payload) {
   return new Promise((resolve, reject) => {
     const opts = {
-      hostname: 'api.anthropic.com', path: '/v1/messages', method: 'POST',
+      hostname: 'api.anthropic.com',
+      path: '/v1/messages',
+      method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(payload),
         'x-api-key': ANTHROPIC_KEY,
         'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'web-search-2025-03-05'
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(payload)
       }
     };
-    const req = https.request(opts, upstream => {
+    const req = https.request(opts, res => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: d }); }
+        catch(e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+async function streamAnthropic(payload, res) {
+  return new Promise((resolve, reject) => {
+    const opts = {
+      hostname: 'api.anthropic.com',
+      path: '/v1/messages',
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(payload)
+      }
+    };
+    const req = https.request(opts, anthropicRes => {
       let buffer = '';
-      upstream.on('data', chunk => {
+      anthropicRes.on('data', chunk => {
         buffer += chunk.toString();
         const lines = buffer.split('\n');
-        buffer = lines.pop(); // keep incomplete line
+        buffer = lines.pop();
         for (const line of lines) {
           if (line.startsWith('data: ')) {
-            const data = line.slice(6).trim();
-            if (data === '[DONE]') { res.write('data: [DONE]\n\n'); continue; }
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              res.write('data: [DONE]\n\n');
+            } else {
+              try {
+                const evt = JSON.parse(data);
+                if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+                  res.write(`data: ${JSON.stringify({ text: evt.delta.text })}\n\n`);
+                }
+              } catch(_) {}
+            }
+          }
+        }
+      });
+      anthropicRes.on('end', () => {
+        if (buffer.startsWith('data: ')) {
+          const data = buffer.slice(6);
+          if (data !== '[DONE]') {
             try {
               const evt = JSON.parse(data);
-              // Forward text delta events
               if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
                 res.write(`data: ${JSON.stringify({ text: evt.delta.text })}\n\n`);
-              }
-              // Signal end of stream
-              if (evt.type === 'message_stop') {
-                res.write('data: [DONE]\n\n');
               }
             } catch(_) {}
           }
         }
+        res.write('data: [DONE]\n\n');
+        res.end();
+        resolve();
       });
-      upstream.on('end', () => resolve());
-      upstream.on('error', reject);
     });
-    req.on('error', reject);
-    req.write(payload); req.end();
+    req.on('error', err => {
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.end();
+      reject(err);
+    });
+    req.write(payload);
+    req.end();
   });
 }
 
-// ── Auth middleware ────────────────────────────────────────────────────────
+// ── Grant cache helpers ────────────────────────────────────────────────────
+async function loadGrantCache() {
+  if (memGrantCache && Date.now() - memGrantCacheTime < CACHE_TTL_MS) {
+    return memGrantCache;
+  }
+  try {
+    const cached = await sbQuery('grantscout_cache', 'key=eq.grants');
+    if (cached && cached.value && Date.now() - new Date(cached.updated_at).getTime() < CACHE_TTL_MS) {
+      memGrantCache = cached.value;
+      memGrantCacheTime = Date.now();
+      return memGrantCache;
+    }
+  } catch(_) {}
+  return null;
+}
+
+async function saveGrantCache(grants) {
+  memGrantCache = grants;
+  memGrantCacheTime = Date.now();
+  try {
+    const existing = await sbQuery('grantscout_cache', 'key=eq.grants');
+    if (existing) {
+      await sbUpdate('grantscout_cache', 'key=eq.grants', { value: grants, updated_at: new Date().toISOString() });
+    } else {
+      await sbInsert('grantscout_cache', { key: 'grants', value: grants });
+    }
+  } catch(e) { console.error('Cache save error:', e.message); }
+}
+
+// ── Auth helpers ───────────────────────────────────────────────────────────
 function getUser(req) {
-  const auth = req.headers['authorization'] || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-  if (!token) return null;
+  const auth = req.headers.authorization || '';
+  const token = auth.replace('Bearer ', '');
   return verifyJWT(token);
 }
 
-// ── Tier enforcement ───────────────────────────────────────────────────────
 async function checkTier(userId, action) {
-  // action: 'search' | 'application' | 'score' | 'improve_all'
-  const user = await sbQuery('grantscout_users', `id=eq.${userId}`);
-  if (!user) return { allowed: false, reason: 'User not found' };
-
-  if (user.tier === 'premium') return { allowed: true, user };
-
-  // Free tier limits
   const today = new Date().toISOString().slice(0, 10);
   const month = new Date().toISOString().slice(0, 7);
 
+  const user = await sbQuery('grantscout_users', `id=eq.${userId}`);
+  if (!user) return { allowed: false, reason: 'User not found' };
+
   if (action === 'search') {
-    // Reset counter if new day
     if (user.search_date !== today) {
       await sbUpdate('grantscout_users', `id=eq.${userId}`, { search_count_today: 0, search_date: today });
       user.search_count_today = 0;
@@ -449,255 +472,240 @@ status ("open"|"upcoming"), deadline (string|null), url (string).`;
 
   const USER = `Search GOV.UK right now and find 18 real currently available UK government grants. Include Innovate UK, DEFRA, British Business Bank, DESNZ, UKRI. Return ONLY a valid JSON array.`;
 
-  let messages = [{ role: 'user', content: USER }];
-  let finalText = '';
-
-  for (let loop = 0; loop < 8; loop++) {
-    const payload = JSON.stringify({
-      model: MODEL, max_tokens: 8000, system: SYSTEM,
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      messages
-    });
-    const result = await enqueue(() => callAnthropic(payload));
-    const data = JSON.parse(result.body);
-    if (result.status !== 200) throw new Error(`Anthropic ${result.status}`);
-    if (data.stop_reason === 'end_turn') {
-      finalText = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-      break;
-    }
-    if (data.stop_reason === 'tool_use') {
-      messages.push({ role: 'assistant', content: data.content });
-      const toolResults = [];
-      for (const block of (data.content||[])) {
-        if (block.type === 'tool_use' && block.name === 'web_search') {
-          toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Search done. Compile grants into JSON array.' });
-        }
-      }
-      if (toolResults.length) messages.push({ role: 'user', content: toolResults });
-      else { finalText = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(''); break; }
-    } else {
-      finalText = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-      break;
-    }
-  }
-
-  const match = finalText.match(/\[\s*\{[\s\S]*\}\s*\]/);
-  if (!match) throw new Error('No JSON found in response');
-  try { return JSON.parse(match[0]); }
-  catch(_) {
-    const cut = match[0].lastIndexOf('},');
-    if (cut > 0) return JSON.parse(match[0].slice(0, cut+1) + ']');
-    throw new Error('Could not parse grant JSON');
-  }
-}
-
-// ── Detect new grants by comparing to cached list ─────────────────────────
-function findNewGrants(freshGrants, cachedGrants) {
-  if (!cachedGrants || !cachedGrants.length) return freshGrants;
-  const cachedTitles = new Set(cachedGrants.map(g => (g.title||'').toLowerCase().trim()));
-  return freshGrants.filter(g => !cachedTitles.has((g.title||'').toLowerCase().trim()));
-}
-
-// ── Save grants to cache in Supabase ─────────────────────────────────────
-async function saveGrantCache(grants) {
-  // Also update in-memory cache
-  memGrantCache = grants;
-  memGrantCacheTime = Date.now();
-
-  const SB_HOST = SUPABASE_URL.replace('https://','');
-  const payload = JSON.stringify({ id: 1, grants, updated_at: new Date().toISOString() });
-  return new Promise((resolve, reject) => {
-    const buf = Buffer.from(payload);
-    const opts = {
-      hostname: SB_HOST,
-      path: '/rest/v1/grant_cache',
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        'Content-Length': buf.byteLength,
-        'Prefer': 'resolution=merge-duplicates'
-      }
-    };
-    const req = https.request(opts, res => {
-      let d = ''; res.on('data', c => d += c);
-      res.on('end', () => resolve({ status: res.statusCode }));
-    });
-    req.on('error', reject);
-    req.write(buf); req.end();
-  });
-}
-
-// ── Load cached grants from Supabase ─────────────────────────────────────
-async function loadGrantCache() {
-  // Return in-memory cache if fresh
-  if (memGrantCache && (Date.now() - memGrantCacheTime) < CACHE_TTL_MS) {
-    return memGrantCache;
-  }
-  const SB_HOST = SUPABASE_URL.replace('https://','');
-  const result = await jsonReq(SB_HOST, '/rest/v1/grant_cache?id=eq.1&limit=1', 'GET', null, {
-    'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Accept': 'application/json'
-  });
-  const rows = Array.isArray(result.body) ? result.body : [];
-  const grants = rows[0]?.grants || [];
-  if (grants.length) {
-    memGrantCache = grants;
-    memGrantCacheTime = Date.now();
-  }
-  return grants;
-}
-
-// ── Send alerts to all subscribers ────────────────────────────────────────
-async function sendGrantAlerts(newGrants, totalGrants) {
-  if (!RESEND_API_KEY) { console.log('Resend not configured, skipping alerts'); return; }
-  if (!newGrants.length) { console.log('No new grants found, skipping alerts'); return; }
-
-  const SB_HOST = SUPABASE_URL.replace('https://','');
-  const result = await jsonReq(SB_HOST, '/rest/v1/email_signups?select=email&limit=1000', 'GET', null, {
-    'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Accept': 'application/json'
-  });
-  const subscribers = Array.isArray(result.body) ? result.body : [];
-  if (!subscribers.length) { console.log('No subscribers yet'); return; }
-
-  console.log(`Sending grant alerts to ${subscribers.length} subscribers...`);
-  const subject = `🔔 ${newGrants.length} New UK Grant${newGrants.length===1?'':'s'} Available — GrantScout`;
-  const html = buildAlertEmail(newGrants, totalGrants);
-
-  let sent = 0;
-  for (let i = 0; i < subscribers.length; i += 10) {
-    const batch = subscribers.slice(i, i + 10);
-    await Promise.all(batch.map(async sub => {
-      const ok = await sendEmail(sub.email, subject, html);
-      if (ok) sent++;
-    }));
-    if (i + 10 < subscribers.length) await sleep(1000);
-  }
-  console.log(`✅ Sent ${sent}/${subscribers.length} alert emails`);
-}
-
-// ── Daily grant check scheduler ─────────────────────────────────────────
-async function runDailyCheck() {
-  console.log('\n🔍 Running daily grant check...');
   try {
-    const [freshGrants, cachedGrants] = await Promise.all([
-      runGrantSearch(),
-      loadGrantCache()
-    ]);
-    console.log(`Found ${freshGrants.length} grants. Cached: ${cachedGrants.length}`);
+    let messages = [{ role: 'user', content: USER }];
+    let finalText = '';
+    for (let loop = 0; loop < 8; loop++) {
+      const payload = JSON.stringify({
+        model: MODEL,
+        max_tokens: 8000,
+        system: SYSTEM,
+        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+        messages
+      });
 
-    const newGrants = findNewGrants(freshGrants, cachedGrants);
-    console.log(`New grants since last check: ${newGrants.length}`);
+      const result = await enqueue(() => callAnthropic(payload));
+      const data = JSON.parse(result.body);
+      if (result.status !== 200) throw new Error(`Anthropic ${result.status}`);
 
-    await saveGrantCache(freshGrants);
+      if (data.stop_reason === 'end_turn') {
+        finalText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+        break;
+      }
+
+      if (data.stop_reason === 'tool_use') {
+        messages.push({ role: 'assistant', content: data.content });
+        const toolResults = [];
+        for (const block of (data.content || [])) {
+          if (block.type === 'tool_use' && block.name === 'web_search') {
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: 'Search completed. Compile all grants found into the JSON array.'
+            });
+          }
+        }
+        if (toolResults.length) {
+          messages.push({ role: 'user', content: toolResults });
+        } else {
+          finalText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+          break;
+        }
+      } else {
+        finalText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+        break;
+      }
+    }
+
+    const match = finalText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+    if (!match) throw new Error('No grant data found');
+
+    let grants;
+    try { grants = JSON.parse(match[0]); }
+    catch (_) {
+      const cut = match[0].lastIndexOf('},');
+      if (cut > 0) grants = JSON.parse(match[0].slice(0, cut + 1) + ']');
+      else throw new Error('Could not parse grant JSON');
+    }
+
+    if (!grants || !grants.length) throw new Error('Empty grants array');
+    return grants;
+  } catch (err) {
+    console.error('Grant search error:', err.message);
+    return null;
+  }
+}
+
+// ── Scheduled grant alert check ────────────────────────────────────────────
+async function checkAndAlertGrants() {
+  console.log('Checking for new grants...');
+  try {
+    const fresh = await runGrantSearch();
+    if (!fresh || !fresh.length) {
+      console.log('No fresh grants found');
+      return;
+    }
+
+    const cached = await loadGrantCache();
+    const oldIds = new Set((cached || []).map(g => g.id));
+    const newGrants = fresh.filter(g => !oldIds.has(g.id));
 
     if (newGrants.length > 0) {
-      await sendGrantAlerts(newGrants, freshGrants.length);
-    }
+      console.log(`Found ${newGrants.length} new grants`);
+      await saveGrantCache(fresh);
 
-    console.log('✅ Daily grant check complete\n');
-  } catch(err) {
-    console.error('❌ Daily grant check failed:', err.message);
+      const users = await sbQuery('grantscout_users', 'grant_alerts=eq.true');
+      if (Array.isArray(users)) {
+        for (const user of users) {
+          const html = buildAlertEmail(newGrants, fresh.length);
+          await sendEmail(user.email, `${newGrants.length} New UK Grants Available`, html);
+        }
+      }
+    } else {
+      console.log('No new grants since last check');
+    }
+  } catch (err) {
+    console.error('Alert check error:', err.message);
   }
 }
 
-// Schedule daily check at 8am UTC every day
-function scheduleDailyCheck() {
-  const now = new Date();
-  const next8am = new Date(now);
-  next8am.setUTCHours(8, 0, 0, 0);
-  if (next8am <= now) next8am.setUTCDate(next8am.getUTCDate() + 1);
-  const msUntil8am = next8am - now;
-  console.log(`⏰ Next grant check scheduled in ${Math.round(msUntil8am/1000/60)} minutes (8am UTC)`);
-  setTimeout(() => {
-    runDailyCheck();
-    setInterval(runDailyCheck, 24 * 60 * 60 * 1000);
-  }, msUntil8am);
-}
+// Run alert check every 6 hours
+setInterval(checkAndAlertGrants, 6 * 60 * 60 * 1000);
 
-// ── HTTP Server ────────────────────────────────────────────────────────────
-http.createServer(async (req, res) => {
-  const url = req.url.split('?')[0];
 
+// ══════════════════════════════════════════════════════════════════════════
+// HTTP SERVER
+// ══════════════════════════════════════════════════════════════════════════
+
+const http = require('http');
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host}`).pathname;
+
+  // ── CORS headers ─────────────────────────────────────────────────────────
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+  if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
-  // ── POST /api/register ──────────────────────────────────────────────────
+  // ── Static files ─────────────────────────────────────────────────────────
+  if (req.method === 'GET' && url !== '/') {
+    const file = path.join(__dirname, url);
+    if (fs.existsSync(file) && fs.statSync(file).isFile()) {
+      const ext = path.extname(file);
+      const mime = MIME[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': mime });
+      res.end(fs.readFileSync(file));
+      return;
+    }
+  }
+
+  // ── Helper: read request body ────────────────────────────────────────────
+  function readBody(req) {
+    return new Promise((resolve, reject) => {
+      let d = '';
+      req.on('data', c => d += c);
+      req.on('end', () => resolve(Buffer.from(d)));
+      req.on('error', reject);
+    });
+  }
+
+  // ── GET / — serve landing page ───────────────────────────────────────────
+  if (req.method === 'GET' && url === '/') {
+    const file = path.join(__dirname, 'landing.html');
+    if (fs.existsSync(file)) {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(fs.readFileSync(file));
+      return;
+    }
+  }
+
+  // ── POST /api/login ──────────────────────────────────────────────────────
+  if (req.method === 'POST' && url === '/api/login') {
+    const buf = await readBody(req);
+    let parsed;
+    try { parsed = JSON.parse(buf.toString()); } catch(e) { res.writeHead(400); res.end('Bad JSON'); return; }
+
+    const { email, password } = parsed;
+    if (!email || !password) { res.writeHead(400); res.end(JSON.stringify({ error: 'Email and password required' })); return; }
+
+    try {
+      let user = await sbQuery('grantscout_users', `email=eq.${encodeURIComponent(email)}`);
+      if (!user) {
+        user = await sbInsert('grantscout_users', {
+          email,
+          password_hash: crypto.createHash('sha256').update(password).digest('hex'),
+          tier: 'free',
+          created_at: new Date().toISOString()
+        });
+      } else {
+        const hash = crypto.createHash('sha256').update(password).digest('hex');
+        if (user.password_hash !== hash) {
+          res.writeHead(401); res.end(JSON.stringify({ error: 'Invalid password' })); return;
+        }
+      }
+
+      const token = signJWT({ sub: user.id, email: user.email, tier: user.tier });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ token, email: user.email, tier: user.tier }));
+    } catch(err) {
+      console.error('Login error:', err.message);
+      res.writeHead(500); res.end(JSON.stringify({ error: 'Server error' }));
+    }
+    return;
+  }
+
+  // ── POST /api/register ───────────────────────────────────────────────────
   if (req.method === 'POST' && url === '/api/register') {
     const buf = await readBody(req);
-    const { email, password } = JSON.parse(buf.toString());
+    let parsed;
+    try { parsed = JSON.parse(buf.toString()); } catch(e) { res.writeHead(400); res.end('Bad JSON'); return; }
+
+    const { email, password } = parsed;
     if (!email || !password || password.length < 8) {
       res.writeHead(400); res.end(JSON.stringify({ error: 'Email and password (8+ chars) required' })); return;
     }
-    const existing = await sbQuery('grantscout_users', `email=eq.${encodeURIComponent(email)}`);
-    if (existing) { res.writeHead(409); res.end(JSON.stringify({ error: 'Email already registered' })); return; }
-    const hash = hashPassword(password);
-    const result = await sbInsert('grantscout_users', { email, password_hash: hash });
-    if (result.status !== 201) { res.writeHead(500); res.end(JSON.stringify({ error: 'Registration failed' })); return; }
-    const user = Array.isArray(result.body) ? result.body[0] : result.body;
-    const token = signJWT({ sub: user.id, email: user.email, tier: user.tier, exp: Math.floor(Date.now()/1000) + 86400*30 });
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ token, tier: user.tier, email: user.email }));
-    return;
-  }
 
-  // ── POST /api/login ─────────────────────────────────────────────────────
-  if (req.method === 'POST' && url === '/api/login') {
-    const buf = await readBody(req);
-    const { email, password } = JSON.parse(buf.toString());
-    const user = await sbQuery('grantscout_users', `email=eq.${encodeURIComponent(email)}`);
-    if (!user || !verifyPassword(password, user.password_hash)) {
-      res.writeHead(401); res.end(JSON.stringify({ error: 'Invalid email or password' })); return;
+    try {
+      const existing = await sbQuery('grantscout_users', `email=eq.${encodeURIComponent(email)}`);
+      if (existing) {
+        res.writeHead(409); res.end(JSON.stringify({ error: 'Email already registered' })); return;
+      }
+
+      const user = await sbInsert('grantscout_users', {
+        email,
+        password_hash: crypto.createHash('sha256').update(password).digest('hex'),
+        tier: 'free',
+        created_at: new Date().toISOString()
+      });
+
+      const token = signJWT({ sub: user.id, email: user.email, tier: user.tier });
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ token, email: user.email, tier: user.tier }));
+    } catch(err) {
+      console.error('Register error:', err.message);
+      res.writeHead(500); res.end(JSON.stringify({ error: 'Server error' }));
     }
-    const token = signJWT({ sub: user.id, email: user.email, tier: user.tier, exp: Math.floor(Date.now()/1000) + 86400*30 });
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ token, tier: user.tier, email: user.email }));
     return;
   }
 
-  // ── GET /api/me ─────────────────────────────────────────────────────────
-  if (req.method === 'GET' && url === '/api/me') {
-    const user = getUser(req);
-    if (!user) { res.writeHead(401); res.end(JSON.stringify({ error: 'Not logged in' })); return; }
-    const dbUser = await sbQuery('grantscout_users', `id=eq.${user.sub}`);
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ email: dbUser.email, tier: dbUser.tier,
-      searches_today: dbUser.search_count_today, applications_month: dbUser.application_count_month }));
-    return;
-  }
-
-  // ── POST /api/checkout ──────────────────────────────────────────────────
+  // ── POST /api/checkout (Stripe) ──────────────────────────────────────────
   if (req.method === 'POST' && url === '/api/checkout') {
     const user = getUser(req);
     if (!user) { res.writeHead(401); res.end(JSON.stringify({ error: 'Login required' })); return; }
 
     try {
       const dbUser = await sbQuery('grantscout_users', `id=eq.${user.sub}`);
-      if (!dbUser) { res.writeHead(404); res.end(JSON.stringify({ error: 'User not found' })); return; }
-
-      let customerId = dbUser.stripe_customer_id;
-      if (!customerId) {
-        const cust = await stripeReq('/v1/customers', {
-          email: dbUser.email,
-          'metadata[user_id]': user.sub
-        });
-        if (!cust.body.id) {
-          console.error('Stripe customer create failed:', JSON.stringify(cust.body));
-          res.writeHead(500); res.end(JSON.stringify({ error: 'Could not create Stripe customer: ' + (cust.body.error?.message || 'unknown') })); return;
-        }
-        customerId = cust.body.id;
-        await sbUpdate('grantscout_users', `id=eq.${user.sub}`, { stripe_customer_id: customerId });
-        console.log('Created Stripe customer:', customerId);
+      if (!dbUser.stripe_customer_id) {
+        const customer = await stripeReq('/v1/customers', { email: user.email });
+        await sbUpdate('grantscout_users', `id=eq.${user.sub}`, { stripe_customer_id: customer.body.id });
       }
 
       const session = await stripeReq('/v1/checkout/sessions', {
-        'customer': customerId,
-        'mode': 'subscription',
+        'customer': dbUser.stripe_customer_id || customer.body.id,
         'line_items[0][price]': STRIPE_PRICE_ID,
         'line_items[0][quantity]': '1',
-        'success_url': `${APP_URL}/index.html?upgraded=1`,
+        'mode': 'subscription',
+        'success_url': `${APP_URL}/index.html`,
         'cancel_url': `${APP_URL}/index.html`,
         'metadata[user_id]': user.sub,
         'payment_method_types[0]': 'card',
@@ -796,28 +804,15 @@ http.createServer(async (req, res) => {
     return;
   }
 
-  // ── POST /api/search — with caching for speed ─────────────────────────────
+  // ── POST /api/search — ALWAYS fetch live GOV.UK data ────────────────────
   if (req.method === 'POST' && url === '/api/search') {
     const user = getUser(req);
     if (!user) { res.writeHead(401); res.end(JSON.stringify({ error: 'Please log in to search for grants' })); return; }
 
-    // Check cache first — return immediately if fresh
-    const cached = await loadGrantCache();
-    if (cached && cached.length > 0) {
-      console.log(`Cache hit: returning ${cached.length} grants instantly`);
-      // Still check tier (counts a search)
-      const check = await checkTier(user.sub, 'search');
-      if (!check.allowed) {
-        res.writeHead(403); res.end(JSON.stringify({ error: check.reason, upgrade: true })); return;
-      }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ grants: cached, searches: 0, cached: true }));
-      return;
-    }
-
-    const check = await checkTier(user.sub, 'search');
-    if (!check.allowed) {
-      res.writeHead(403); res.end(JSON.stringify({ error: check.reason, upgrade: true })); return;
+    // Check tier first
+    const tierCheck = await checkTier(user.sub, 'search');
+    if (!tierCheck.allowed) {
+      res.writeHead(403); res.end(JSON.stringify({ error: tierCheck.reason, upgrade: true })); return;
     }
 
     const SYSTEM = `HARD SECURITY RULES: You have zero access to local files, env vars, cookies, clipboard or device hardware.
@@ -900,17 +895,25 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
 
       if (!grants || !grants.length) throw new Error('Empty grants array');
 
-      // Cache the fresh results
+      // Cache the fresh results for fallback
       saveGrantCache(grants).catch(e => console.error('Cache save error:', e.message));
 
       console.log(`Search complete: ${grants.length} grants, ${searches} web searches`);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ grants, searches }));
+      res.end(JSON.stringify({ grants, searches, cached: false }));
 
     } catch (err) {
       console.error('Search error:', err.message);
-      res.writeHead(500);
-      res.end(JSON.stringify({ error: err.message }));
+      // On error, try to fall back to cache
+      const cached = await loadGrantCache();
+      if (cached && cached.length > 0) {
+        console.log(`Fallback: returning ${cached.length} cached grants`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ grants: cached, searches: 0, cached: true, error: 'Live search failed, showing cached results' }));
+      } else {
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: err.message }));
+      }
     }
     return;
   }
@@ -948,13 +951,14 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
     try {
       await streamAnthropic(payload, res);
     } catch(err) {
+      console.error('Stream error:', err.message);
       res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.end();
     }
-    res.end();
     return;
   }
 
-  // ── POST /api/chat — non-streaming fallback ──────────────────────────────
+  // ── POST /api/chat (non-streaming, for backwards compat) ──────────────────
   if (req.method === 'POST' && url === '/api/chat') {
     const user = getUser(req);
     if (!user) { res.writeHead(401); res.end(JSON.stringify({ error: 'Please log in to use this feature' })); return; }
@@ -970,83 +974,35 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
       res.writeHead(403); res.end(JSON.stringify({ error: check.reason, upgrade: true })); return;
     }
 
-    parsed.model      = MODEL;
-    parsed.max_tokens = parsed.max_tokens || 8000;
+    parsed.model = MODEL;
+    parsed.max_tokens = parsed.max_tokens || 1000;
     delete parsed.stream;
 
-    const payload = JSON.stringify(parsed);
     try {
+      const payload = JSON.stringify(parsed);
       const result = await enqueue(() => callAnthropic(payload));
-      res.writeHead(result.status, { 'Content-Type': 'application/json' });
-      res.end(result.body);
-    } catch(err) {
-      res.writeHead(502); res.end(JSON.stringify({ error: err.message }));
-    }
-    return;
-  }
+      const data = JSON.parse(result.body);
 
-  // ── GET /api/config ─────────────────────────────────────────────────────
-  if (req.method === 'GET' && url === '/api/config') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ stripePk: STRIPE_PUBLISHABLE }));
-    return;
-  }
-
-  // ── GET /api/test-alerts (manual trigger for testing) ────────────────────
-  if (req.method === 'GET' && url === '/api/test-alerts') {
-    const user = getUser(req);
-    if (!user) { res.writeHead(401); res.end('Unauthorised'); return; }
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ message: 'Daily check triggered — check Railway logs' }));
-    runDailyCheck();
-    return;
-  }
-
-  // ── POST /api/email-signup ──────────────────────────────────────────────
-  if (req.method === 'POST' && url === '/api/email-signup') {
-    try {
-      const buf  = await readBody(req);
-      const { email } = JSON.parse(buf.toString());
-      if (!email || !email.includes('@')) {
-        res.writeHead(400); res.end(JSON.stringify({ error: 'Valid email required' })); return;
+      if (result.status !== 200) {
+        throw new Error(`Anthropic ${result.status}: ${JSON.stringify(data).slice(0, 200)}`);
       }
-      const existing = await sbQuery('email_signups', `email=eq.${encodeURIComponent(email)}`);
-      if (existing) {
-        res.writeHead(200, {'Content-Type':'application/json'});
-        res.end(JSON.stringify({ ok: true, message: 'Already signed up!' })); return;
-      }
-      await sbInsert('email_signups', { email });
-      res.writeHead(200, {'Content-Type':'application/json'});
-      res.end(JSON.stringify({ ok: true, message: "You're on the list!" }));
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(data));
     } catch(err) {
-      console.error('Email signup error:', err.message);
-      res.writeHead(500); res.end(JSON.stringify({ error: 'Signup failed, please try again' }));
+      console.error('Chat error:', err.message);
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: err.message }));
     }
     return;
   }
 
-  // ── Serve static files ──────────────────────────────────────────────────
-  let fileName = url === '/' ? 'landing.html' : url.replace(/^\//, '').split('?')[0].split('#')[0];
-  if (fileName.includes('..')) { res.writeHead(403); res.end('Forbidden'); return; }
-  const fullPath = path.join(__dirname, fileName);
-  console.log('Static request: ' + url + ' -> ' + fullPath);
+  // ── 404 ──────────────────────────────────────────────────────────────────
+  res.writeHead(404);
+  res.end('Not found');
+});
 
-  fs.readFile(fullPath, (err, data) => {
-    if (err) {
-      console.error('File not found: ' + fullPath);
-      fs.readdir(__dirname, (e2, files) => {
-        const list = e2 ? 'unknown' : (files||[]).filter(f=>/\.(html|js|json)$/.test(f)).join(', ');
-        res.writeHead(404, {'Content-Type':'text/html'});
-        res.end('<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px"><h2>404 - Not Found</h2><p>Requested: <code>' + fileName + '</code></p><p>Files available: <code>' + list + '</code></p><p><a href=\"/\">Home</a></p></body></html>');
-      });
-      return;
-    }
-    const mime = MIME[path.extname(fullPath)] || 'application/octet-stream';
-    res.writeHead(200, {'Content-Type': mime});
-    res.end(data);
-  });
-
-}).listen(PORT, '0.0.0.0', () => {
-  console.log('Ready on port ' + PORT);
-  scheduleDailyCheck();
+server.listen(PORT, () => {
+  console.log(`✓ Server running on port ${PORT}`);
+  console.log(`✓ Open http://localhost:${PORT}`);
 });

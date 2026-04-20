@@ -565,6 +565,7 @@ async function startSearch(){
     const grants=data.grants;
     const searches=data.searches||0;
     const fromCache=data.cached||false;
+    const errorMsg=data.error||'';
     if(!grants||!grants.length)throw new Error('No grants returned');
     allGrants=grants;
     setProgress(100,`✅ ${grants.length} grants loaded`);
@@ -572,7 +573,7 @@ async function startSearch(){
     doneStep('Searching');
     addStep('Complete','done');
     if(fromCache){
-      setAI('active',`✅ <strong>${grants.length} grants</strong> loaded instantly from cache. <span class="ai-cached-badge">CACHED</span>`);
+      setAI('active',`✅ <strong>${grants.length} grants</strong> loaded. ${errorMsg?'(Showing cached results)':''} `);
     } else {
       setAI('active',`✅ <strong>${grants.length} live grants</strong> found via ${searches} GOV.UK searches.`);
     }
