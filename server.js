@@ -636,6 +636,45 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+
+  // ── GET /api/diag — shows config status (no secrets exposed) ─────────────
+  if (req.method === 'GET' && url === '/api/diag') {
+    try {
+      // Test Supabase connection
+      const sbTest = await jsonReq(SB_HOST, '/rest/v1/grantscout_users?limit=1', 'GET', null, {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Accept': 'application/json'
+      });
+
+      const result = {
+        env: {
+          ANTHROPIC_API_KEY:      ANTHROPIC_KEY      ? `✅ set (${ANTHROPIC_KEY.slice(0,8)}...)` : '❌ MISSING',
+          STRIPE_SECRET_KEY:      STRIPE_SECRET      ? `✅ set (${STRIPE_SECRET.slice(0,8)}...)` : '❌ MISSING',
+          STRIPE_PUBLISHABLE_KEY: STRIPE_PUBLISHABLE ? `✅ set (${STRIPE_PUBLISHABLE.slice(0,8)}...)` : '❌ MISSING',
+          STRIPE_WEBHOOK_SECRET:  STRIPE_WEBHOOK_SECRET ? '✅ set' : '❌ MISSING',
+          STRIPE_PRICE_ID:        STRIPE_PRICE_ID    ? `✅ set (${STRIPE_PRICE_ID})` : '❌ MISSING',
+          SUPABASE_URL:           SUPABASE_URL       ? `✅ set (${SUPABASE_URL})` : '❌ MISSING',
+          SUPABASE_SERVICE_KEY:   SUPABASE_KEY       ? `✅ set (${SUPABASE_KEY.slice(0,8)}...)` : '❌ MISSING',
+          JWT_SECRET:             JWT_SECRET         ? '✅ set' : '❌ MISSING',
+          RESEND_API_KEY:         RESEND_API_KEY     ? '✅ set' : '⚠️ not set (email alerts disabled)',
+          APP_URL:                APP_URL            ? `✅ set (${APP_URL})` : '⚠️ not set',
+        },
+        supabase: {
+          status: sbTest.status,
+          response_type: Array.isArray(sbTest.body) ? 'array ✅' : typeof sbTest.body,
+          response_preview: JSON.stringify(sbTest.body).slice(0, 200),
+        }
+      };
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result, null, 2));
+    } catch(err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   // ── POST /api/login ──────────────────────────────────────────────────────
   if (req.method === 'POST' && url === '/api/login') {
     const buf = await readBody(req);
