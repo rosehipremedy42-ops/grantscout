@@ -335,6 +335,10 @@ async function checkTier(userId, action) {
   const user = await sbQuery('grantscout_users', `id=eq.${userId}`);
   if (!user) return { allowed: false, reason: 'User not found' };
 
+  // Premium users bypass ALL limits
+  if (user.tier === 'premium') return { allowed: true, user };
+
+  // ── Free tier limits ───────────────────────────────────────────────────────
   if (action === 'search') {
     if (user.search_date !== today) {
       await sbUpdate('grantscout_users', `id=eq.${userId}`, { search_count_today: 0, search_date: today });
@@ -836,8 +840,14 @@ Return ONLY a valid JSON array starting with [ and ending with ]. No markdown, n
       let messages = [{ role: 'user', content: USER }];
       let finalText = '';
       let searches = 0;
+      const searchDeadline = Date.now() + 24000; // 24s server-side deadline
 
-      for (let loop = 0; loop < 8; loop++) {
+      for (let loop = 0; loop < 5; loop++) {
+        // Stop looping if we're close to Railway's 30s timeout
+        if (Date.now() > searchDeadline) {
+          console.log('Search deadline reached, returning what we have');
+          break;
+        }
         const payload = JSON.stringify({
           model: MODEL,
           max_tokens: 8000,
