@@ -541,53 +541,86 @@ async function startSearch(){
   },2000);
 
   try{
-    const token=localStorage.getItem('gs_token')||'';
-    const resp=await fetch('/api/search',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}
-    });
+    const token = localStorage.getItem('gs_token')||'';
+
+    // AbortController — cancel fetch after 27s before Railway kills it at 30s
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 27000);
+
+    let resp;
+    try {
+      resp = await fetch('/api/search',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+        signal: controller.signal
+      });
+    } catch(fetchErr) {
+      // Timeout or network error — don't redirect, just show cached grants
+      clearTimeout(timeoutId);
+      clearInterval(ticker);
+      allGrants=getFallback(); updateStats();
+      setProgress(100,'Search timed out — showing cached grants');
+      setAI('active','Live search took too long. Showing cached grants — try again in a moment.');
+      setTimeout(()=>$('progressWrap').classList.remove('show'),5000);
+      return;
+    }
+    clearTimeout(timeoutId);
     clearInterval(ticker);
-    if(resp.status===401){window.location.href='login.html';return;}
+
+    // 401 — token invalid, re-login silently (don't hard redirect)
+    if(resp.status===401){
+      localStorage.removeItem('gs_token');
+      localStorage.removeItem('gs_email');
+      localStorage.removeItem('gs_tier');
+      allGrants=getFallback(); updateStats();
+      setProgress(100,'Session expired — please log in again');
+      setAI('active','Your session expired. <a href="login.html" style="color:var(--accent)">Log in again →</a>');
+      setTimeout(()=>$('progressWrap').classList.remove('show'),6000);
+      return;
+    }
+
     if(resp.status===403){
-      const d=await resp.json();
+      const d=await resp.json().catch(()=>({}));
       showUpgradeModal(d.error||'Upgrade to search for grants.');
       setProgress(100,'Search limit reached');
-      allGrants=getFallback();updateStats();
+      allGrants=getFallback(); updateStats();
       setAI('active','Search limit reached. Showing cached grants.');
       setTimeout(()=>$('progressWrap').classList.remove('show'),4000);
       return;
     }
+
     if(!resp.ok){
       const d=await resp.json().catch(()=>({}));
       throw new Error(d.error||`Server error ${resp.status}`);
     }
-    const data=await resp.json();
+
+    const data=await resp.json().catch(()=>({}));
     const grants=data.grants;
     const searches=data.searches||0;
     const fromCache=data.cached||false;
-    const errorMsg=data.error||'';
-    if(!grants||!grants.length)throw new Error('No grants returned');
+
+    if(!grants||!grants.length) throw new Error('No grants returned');
+
     allGrants=grants;
     setProgress(100,`✅ ${grants.length} grants loaded`);
     updateStats();
     doneStep('Searching');
     addStep('Complete','done');
-    if(fromCache){
-      setAI('active',`✅ <strong>${grants.length} grants</strong> loaded. ${errorMsg?'(Showing cached results)':''} `);
-    } else {
-      setAI('active',`✅ <strong>${grants.length} live grants</strong> found via ${searches} GOV.UK searches.`);
-    }
+    setAI('active', fromCache
+      ? `✅ <strong>${grants.length} grants</strong> loaded from cache.`
+      : `✅ <strong>${grants.length} live grants</strong> found via ${searches} GOV.UK searches.`);
     setTimeout(()=>$('progressWrap').classList.remove('show'),2500);
+
   }catch(err){
     clearInterval(ticker);
     console.error('Search error:',err);
-    allGrants=getFallback();updateStats();
+    allGrants=getFallback(); updateStats();
     if(err.message.includes('429')||err.message.includes('rate')){
       setProgress(100,'Rate limited — try again in 30 seconds');
-      setAI('thinking','⏳ <strong>Rate limit reached</strong> — wait 30 seconds then click Refresh.');
+      setAI('thinking','⏳ Rate limit reached — wait 30 seconds then click Refresh.');
     } else {
-      setProgress(100,'Using cached grants');
-      setAI('active','Showing cached grants. Live search will retry next time.');
+      setProgress(100,'Showing cached grants');
+      setAI('active','Live search unavailable right now. Showing cached grants — try again shortly.');
     }
     setTimeout(()=>$('progressWrap').classList.remove('show'),5000);
   }
