@@ -158,26 +158,39 @@ const SB_HOST = SUPABASE_URL.replace('https://','');
 
 async function sbQuery(table, filter) {
   const res = await jsonReq(SB_HOST, `/rest/v1/${table}?${filter}&limit=1`, 'GET', null, {
+    'apikey': SUPABASE_KEY,
     'Authorization': `Bearer ${SUPABASE_KEY}`,
-    'Prefer': 'return=representation'
+    'Accept': 'application/json'
   });
-  const data = res.body;
-  return Array.isArray(data) ? data[0] : data;
+  if (!Array.isArray(res.body)) {
+    console.error('sbQuery unexpected response:', JSON.stringify(res.body).slice(0,200));
+    return null;
+  }
+  return res.body[0] || null;
 }
 
 async function sbInsert(table, obj) {
   const res = await jsonReq(SB_HOST, `/rest/v1/${table}`, 'POST', obj, {
+    'apikey': SUPABASE_KEY,
     'Authorization': `Bearer ${SUPABASE_KEY}`,
-    'Prefer': 'return=representation'
+    'Prefer': 'return=representation',
+    'Content-Type': 'application/json'
   });
-  return Array.isArray(res.body) ? res.body[0] : res.body;
+  if (!Array.isArray(res.body)) {
+    console.error('sbInsert unexpected response:', JSON.stringify(res.body).slice(0,200));
+    throw new Error('Database insert failed: ' + JSON.stringify(res.body).slice(0,100));
+  }
+  return res.body[0] || null;
 }
 
 async function sbUpdate(table, filter, obj) {
-  return await jsonReq(SB_HOST, `/rest/v1/${table}?${filter}`, 'PATCH', obj, {
+  const res = await jsonReq(SB_HOST, `/rest/v1/${table}?${filter}`, 'PATCH', obj, {
+    'apikey': SUPABASE_KEY,
     'Authorization': `Bearer ${SUPABASE_KEY}`,
-    'Prefer': 'return=representation'
+    'Prefer': 'return=representation',
+    'Content-Type': 'application/json'
   });
+  return res;
 }
 
 // ── Anthropic helpers ──────────────────────────────────────────────────────
