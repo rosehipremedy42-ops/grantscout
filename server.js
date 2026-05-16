@@ -1,3 +1,4 @@
+const http  = require('http');
 const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
@@ -52,6 +53,16 @@ const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ── Read request body ───────────────────────────────────────────────────────
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
 
 function jsonReq(hostname, path, method, body, extraHeaders) {
   return new Promise((resolve, reject) => {
@@ -577,7 +588,6 @@ setInterval(checkAndAlertGrants, 6 * 60 * 60 * 1000);
 // HTTP SERVER
 // ══════════════════════════════════════════════════════════════════════════
 
-const http = require('http');
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`).pathname;
 
@@ -597,16 +607,6 @@ const server = http.createServer(async (req, res) => {
       res.end(fs.readFileSync(file));
       return;
     }
-  }
-
-  // ── Helper: read request body ────────────────────────────────────────────
-  function readBody(req) {
-    return new Promise((resolve, reject) => {
-      let d = '';
-      req.on('data', c => d += c);
-      req.on('end', () => resolve(Buffer.from(d)));
-      req.on('error', reject);
-    });
   }
 
   // ── GET / — serve landing page ───────────────────────────────────────────
@@ -629,21 +629,23 @@ const server = http.createServer(async (req, res) => {
     if (!email || !password) { res.writeHead(400); res.end(JSON.stringify({ error: 'Email and password required' })); return; }
 
     try {
-      let user = await sbQuery('grantscout_users', `email=eq.${encodeURIComponent(email)}`);
+      const user = await sbQuery('grantscout_users', `email=eq.${encodeURIComponent(email)}`);
       if (!user) {
-        user = await sbInsert('grantscout_users', {
-          email,
-          password_hash: crypto.createHash('sha256').update(password).digest('hex'),
-          tier: 'free',
-          created_at: new Date().toISOString()
-        });
-      } else {
-        const hash = crypto.createHash('sha256').update(password).digest('hex');
-        if (user.password_hash !== hash) {
-          res.writeHead(401); res.end(JSON.stringify({ error: 'Invalid password' })); return;
-        }
+        res.writeHead(401); res.end(JSON.stringify({ error: 'Invalid email or password' })); return;
       }
-
+      // Support both SHA256 (legacy) and salted hash
+      let valid = false;
+      if (user.password_hash && user.password_hash.includes(':')) {
+        // Salted hash: salt:hash
+        const [salt, hash] = user.password_hash.split(':');
+        valid = crypto.createHmac('sha256', salt).update(password).digest('hex') === hash;
+      } else {
+        // Legacy plain SHA256
+        valid = crypto.createHash('sha256').update(password).digest('hex') === user.password_hash;
+      }
+      if (!valid) {
+        res.writeHead(401); res.end(JSON.stringify({ error: 'Invalid email or password' })); return;
+      }
       const token = signJWT({ sub: user.id, email: user.email, tier: user.tier });
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ token, email: user.email, tier: user.tier }));
